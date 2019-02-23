@@ -196,16 +196,13 @@ function(input, output, session){
     dAsA_clusters <- reactive({
       kmeans(dAsA_data, input$dAsA_k, nstart = 10, iter.max = 20)
     })
+    
     dAsA_selectData <- reactive({
       dAsA_data %>% 
         mutate(cluster = dAsA_clusters()$cluster) %>% 
         filter(cluster == as.integer(input$dAsA_selectCluster)) %>% 
         select(-cluster) %>% 
         gather(key = "dimansions", value = "total.ratio") %>%
-        group_by(dimansions) %>% 
-        summarise(n = length(total.ratio), 
-                  total.ratio.mean = mean(total.ratio), 
-                  total.ratio.sd = sd(total.ratio)) %>% 
         mutate(deltaAsset = sapply(strsplit(dimansions, "-"), "[", 1), 
                action = sapply(strsplit(dimansions, "-"), "[", 2))
     })
@@ -213,10 +210,27 @@ function(input, output, session){
     # plot
     output$dAsA_clusterPlot <- renderPlot({
       g <- dAsA_selectData() %>% 
+        group_by(dimansions, deltaAsset, action) %>% 
+        summarise(n = length(total.ratio), 
+                  total.ratio.mean = mean(total.ratio), 
+                  total.ratio.sd = sd(total.ratio)) %>% 
         ggplot(aes(x = deltaAsset, y = total.ratio.mean, fill = action)) +
         geom_bar(stat = "identity", position = "dodge") + 
         coord_cartesian(ylim = c(0, 0.4)) 
       g
+    })
+    
+    output$dAsA_tTestPlot <- renderPlot({
+      g <- dAsA_selectData() %>% 
+        ggplot(aes(x = action, y = total.ratio, color = action)) +
+        geom_boxplot() + 
+        geom_jitter(position = position_jitter(0.2), alpha = I(0.25)) +
+        facet_grid(. ~ deltaAsset) +
+        theme_bw()
+      g + stat_compare_means(method = "t.test", paired = TRUE, 
+                             comparisons = list(c("buy", "no trade"), c("no trade", "sell"), c("buy", "sell")),
+                             label = "p.signif",
+                             label.y = c(0.6, 0.65, 0.7))
     })
     
     output$dAsA_fvizPlot <- renderPlot({

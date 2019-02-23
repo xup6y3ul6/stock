@@ -119,6 +119,7 @@ navbarPage(
       
       mainPanel(
         plotOutput("dAsA_clusterPlot"),
+        plotOutput("dAsA_tTestPlot"),
         plotOutput("dAsA_fvizPlot"),
         plotOutput("dAsA_elbowPlot"),
         plotOutput("dAsA_dendPlot")
