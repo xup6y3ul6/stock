@@ -9,25 +9,29 @@
   library(ClusterR)
 }
 
-# load data
+# load all data (behavior+hyperscanning)
 {
-  fileNames <- dir("data")
-  fileNames <- paste0("data/", fileNames)
+  .fileNames <- dir("data")
+  fileNames <- paste0("data/", .fileNames)
   data <- lapply(fileNames, read.csv, header = TRUE)
   numOfData <- length(data)  # == 160 subjects
   numOfPair <- numOfData / 2 # == 80 pairs
   
   for(i in 1:numOfPair){
-    stopifnot(data[[2*i-1]]$StockPrice == data[[2*i-1]]$StockPrice)
-    
-    lastRow = length(data[[2*i-1]]$p1Cash[!is.na(data[[2*i-1]]$p1Cash)])
-    if(data[[2*i-1]][lastRow, "p1Cash"] > data[[2*i]][lastRow, "p2Cash"]){
+    # 先確認是不是同一組(同組的股票價格應該都會是一樣的)
+    stopifnot(data[[2*i-1]]$StockPrice == data[[2*i-1]]$StockPrice) 
+    # 增加一欄：玩家該場的勝負輸贏
+    .lastRow = length(data[[2*i-1]]$p1Cash[!is.na(data[[2*i-1]]$p1Cash)])
+    if(data[[2*i-1]][.lastRow, "p1Cash"] > data[[2*i]][.lastRow, "p2Cash"]){
       data[[2*i-1]]$Outcome = "win"
       data[[2*i]]$Outcome = "loss"
     }else{
       data[[2*i-1]]$Outcome = "loss"
       data[[2*i]]$Outcome = "win"
     }
+    # 增加一欄該玩家的ID，也就是該檔名
+    data[[2*i-1]]$ID <- sub(".csv", "", basename(fileNames[2*i-1]))
+    data[[2*i]]$ID <- sub(".csv", "", basename(fileNames[2*i]))
   }
 }
 
@@ -49,14 +53,14 @@
 
 # stockList
 {
-  dataList<- list()
+  pairData<- list()
   for(i in 1:numOfPair){
-    dataList[[i]] <- cbind(data[[2*i-1]][c("Trials", "StockPrice", 
+    pairData[[i]] <- cbind(data[[2*i-1]][c("Trials", "StockPrice", 
                                            "p1Stock", "p1Cash", "p1TotalAsset", "p1Decision")], 
                            data[[2*i]][c("p2Stock", "p2Cash", "p2TotalAsset", "p2Decision")])
-    n = nrow(dataList[[i]])
-    dataList[[i]]$PriceChange = c(0, (dataList[[i]]$StockPrice[2:n] - dataList[[i]]$StockPrice[1:(n-1)]))
-    dataList[[i]]$IPriceChange = pcCategorize(dataList[[i]]$StockPrice)
+    n = nrow(pairData[[i]])
+    pairData[[i]]$PriceChange = c(0, (pairData[[i]]$StockPrice[2:n] - pairData[[i]]$StockPrice[1:(n-1)]))
+    pairData[[i]]$IPriceChange = pcCategorize(pairData[[i]]$StockPrice)
   }
 }
 

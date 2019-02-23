@@ -1,21 +1,14 @@
-#
-# This is the user-interface definition of a Shiny web application. You can
-# run the application by clicking 'Run App' above.
-#
-# Find out more about building applications with Shiny here:
-# 
-#    http://shiny.rstudio.com/
-#
 library(shiny)
 source("data.R")
-# Define UI for application that draws a histogram
+
 navbarPage(
   title = "EBG behavior data",
-  #"all data table"
+  # "all data table"
   {tabPanel("All data table",
     titlePanel(
       "All data table (behavior & hyperscanning)"
     ),
+    
     fluidRow(
       column(4,
              selectInput("pairNo", "No. pair (1~80)", 1:numOfPair, selected = 1)),
@@ -26,57 +19,65 @@ navbarPage(
              selectInput("mrkCnd", "Select market condition",
                          c("All", "Balence (1~20)", "Bubble (21~60)", "Burst (61~100)")))
     ),
+    
     DT::dataTableOutput("allData")
   )},
   
-  #"stock plot"
+  # [sp] "stock plot" 
   {tabPanel("Stock price",
      headerPanel(
-       "Stock price & Player information"
+       "Stock price & Player information (by Pair)"
      ),
+     
      sidebarPanel(
        selectInput("pairNumber", "No. pair", 1:numOfPair, selected = 1),
        sliderInput("trialRange", "trial range",
                    min = 1, max = 101, value = c(1, 101)),
-       hr(),
+       
+       tags$hr(style = "border-color: black"),
+       tags$p("2nd plot selection"),
+       
        actionButton("stock", "Stock hold"),
        actionButton("cash", "Cash"),
        actionButton("totalAsset", "Total asset"),
        actionButton("deltaAsset", "Delta asset"),
        actionButton("decision", "Decision")
      ),
+     
      mainPanel(
-       plotlyOutput("spPlot"),
-       plotlyOutput("selectedVarPlot")
+       plotlyOutput("sp_StockPricePlot"),
+       plotlyOutput("sp_SelectedVarPlot")
      )
   )},
   
-  #"Kmeans"
+  # [ipa](interplayer action) 
+  # "Action(i,t)~Action(j,t): K-means"
   {tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,A_j^t\\)")),
     headerPanel(
       "當期票價下 對手與自己的決策組合，做Kmeans clustering"
     ),
     sidebarPanel(
-     selectInput('xcol', 'X Variable', names(decisionDF)),
-     selectInput('ycol', 'Y Variable', names(decisionDF),
+     selectInput('ipa_xcol', 'X Variable', names(decisionDF)),
+     selectInput('ipa_ycol', 'Y Variable', names(decisionDF),
                  selected = names(decisionDF)[[9]]),
-     numericInput('k', 'Cluster count', 4,
+     numericInput('ipa_k', 'Cluster count', 4,
                   min = 1, max = 9),
-     checkboxGroupInput("no.pair", "Select: the pair of players",
+     checkboxGroupInput("ipa_no.pair", "Select: the pair of players",
                         choices = unique(decisionDF$Player),
                         selected = unique(decisionDF$Player), 
                         inline = TRUE)
     ),
     mainPanel(
-      plotOutput('kmeansPlot'),
-      plotOutput('fvizPlot'),
-      plotOutput('elbowPlot'),
-      plotOutput('silhouettePlot'),
-      plotOutput('dendPlot')
+      plotOutput('ipa_kmeansPlot'),
+      plotOutput('ipa_fvizPlot'),
+      plotOutput('ipa_elbowPlot'),
+      plotOutput('ipa_silhouettePlot'),
+      plotOutput('ipa_dendPlot')
     )
   )},
   
-  #"昊閎的K-mean"
+  # [ipal1](interplayer action lag 1) 
+  # "Action(i,t)~Action(j, t-1): K-means(昊閎之前做的）"
   {
     tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,A_j^{t-1}\\)")),
              headerPanel(
@@ -101,25 +102,29 @@ navbarPage(
     )
   },
   
-  # delta asset & player decision by Kmeans clustering
+  # [da](delta asset & action)
+  # "deltaAsset((i-j),t)-Action(i,t): K-means"
   {
-    tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,A_{i-j}^t\\)")),
+    tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta Asset_{i-j}^t\\)")),
       headerPanel(
         "當期雙方的總資產差異與自己的決策，做Kmeans clustering"
       ),
       
       sidebarPanel(
-        
+        numericInput("da_k", "Cluster count", 4,
+                     min = 1, max = 9)
       ),
       
       mainPanel(
-        
+        plotOutput("da_FvizPlot"),
+        plotOutput("da_ElbowPlot"),
+        plotOutput("da_DendPlot")
       )
     )
   },
   
   
-  #"decision"
+  # delta Asset(t) vs. Action(t): K-means
   {tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta P^t \\)")),
     headerPanel(
       "股票變化(漲/持平/跌)與決策配對(買/不買不賣/賣)"

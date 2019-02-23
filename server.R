@@ -1,16 +1,8 @@
-#
-# This is the server logic of a Shiny web application. You can run the 
-# application by clicking 'Run App' above.
-#
-# Find out more about building applications with Shiny here:
-# 
-#    http://shiny.rstudio.com/
-#
 library(shiny)
 source("data.R")
-# Define server logic required to draw a histogram
+
 function(input, output, session){
-  # page: "all data table"
+  # "all data table"
   {
     output$allData <- DT::renderDataTable(
       DT::datatable({
@@ -21,22 +13,22 @@ function(input, output, session){
         switch(input$mrkCnd, 
                "Balence (1~20)" = {trialIndex = 1:20}, 
                "Bubble (21~60)" = {trialIndex = 21:60}, 
-               "Burst (61~100)" = {trialIndex = 61:100})
+               "Burst (61~100)" = {trialIndex = 61:101})
         
         data[[pairIndex]][trialIndex,]
-      },
-      options = list(paging = FALSE),
-      rownames = FALSE
+        },
+        options = list(paging = FALSE),
+        rownames = FALSE
       )
     )
   }
 
-  # page: "stock plot"
+  # "stock plot"
   {
     spData<- reactive({
-      dataList[[as.integer(input$pairNumber)]][c("Trials", "StockPrice")] %>% 
+      pairData[[as.integer(input$pairNumber)]][c("Trials", "StockPrice")] %>% 
         filter(Trials >= input$trialRange[1] & 
-                 Trials <= input$trialRange[2])
+               Trials <= input$trialRange[2])
     })
     
     selectedVar <- reactiveValues(col = c(1, 3, 7), name = "Stock number")
@@ -52,7 +44,7 @@ function(input, output, session){
                                   selectedVar$name <- "Decision"})
     
     playerData <- reactive({
-      .dL <- dataList[[as.integer(input$pairNumber)]][selectedVar$col] %>% 
+      .dL <- pairData[[as.integer(input$pairNumber)]][selectedVar$col] %>% 
         filter(Trials >= input$trialRange[1] & 
                Trials <= input$trialRange[2]) 
       if(selectedVar$name == "Delta asset"){
@@ -64,7 +56,7 @@ function(input, output, session){
       .dL %>% gather(key = "player", value = "value", 2, 3)
     })
     
-    output$spPlot <- renderPlotly({
+    output$sp_StockPricePlot <- renderPlotly({
       g <- ggplot(spData(), aes(x = Trials, y = StockPrice)) +
         geom_line() +
         theme_bw() +
@@ -74,7 +66,7 @@ function(input, output, session){
       ggplotly(g)
     })
     
-    output$selectedVarPlot <- renderPlotly({
+    output$sp_SelectedVarPlot <- renderPlotly({
       g <- ggplot(playerData(), aes(x = Trials, y = value, group = player)) +
         geom_line(aes(linetype = player, color = player)) +
         theme_bw() +
@@ -88,36 +80,36 @@ function(input, output, session){
     })      
   }
   
-  # page: "Kmeans"
+  # "Action(p1,t) vs. Action(p2,t): Kmeans"
   {
     selectedDF <- reactive({
       decisionDF %>% 
-        filter(Player %in% input$no.pair) %>% 
+        filter(Player %in% input$ipa_no.pair) %>% 
         select(-Player)
     })
     clusters <- reactive({
-      kmeans(selectedDF(), input$k)
+      kmeans(selectedDF(), input$ipa_k)
     })
     
-    output$kmeansPlot <- renderPlot({
-      g <- ggplot(selectedDF(), aes_string(input$xcol, input$ycol)) +
+    output$ipa_kmeansPlot <- renderPlot({
+      g <- ggplot(selectedDF(), aes_string(input$ipa_xcol, input$ipa_ycol)) +
         geom_point(aes(color = factor(clusters()$cluster))) +
         geom_point(data = as.data.frame(clusters()$center), 
-                   aes_string(input$xcol, input$ycol), size = 5, shape = 4) +
+                   aes_string(input$ipa_xcol, input$ipa_ycol), size = 5, shape = 4) +
         theme_bw()
       g
     })
     
-    output$fvizPlot <- renderPlot({
-      g <- fviz_cluster(clusters(),                  # 分群結果
-                        data = selectedDF(),        # 資料
+    output$ipa_fvizPlot <- renderPlot({
+      g <- fviz_cluster(clusters(),               # 分群結果
+                        data = selectedDF(),      # 資料
                         geom = c("point","text"), # 點和標籤(point & label)
                         frame.type = "norm") +    # 框架型態
         theme_bw()
       g
     })
     
-    output$elbowPlot <- renderPlot({
+    output$ipa_elbowPlot <- renderPlot({
       g <- fviz_nbclust(selectedDF(), 
                         FUNcluster = kmeans,# K-Means
                         method = "wss",     # total within sum of square
@@ -127,7 +119,7 @@ function(input, output, session){
       g
     })
     
-    output$silhouettePlot <- renderPlot({
+    output$ipa_silhouettePlot <- renderPlot({
       g <- fviz_nbclust(selectedDF(), 
                         FUNcluster = kmeans,# K-Means
                         method =  "silhouette",     # total within sum of square
@@ -137,8 +129,8 @@ function(input, output, session){
       g
     })
     
-    output$dendPlot <- renderPlot({
-      g <- fviz_dend(hkmeans(selectedDF(), input$k), cex = 0.6)
+    output$ipa_dendPlot <- renderPlot({
+      g <- fviz_dend(hkmeans(selectedDF(), input$ipa_k), cex = 0.6)
       g
     })
   }
@@ -192,6 +184,12 @@ function(input, output, session){
     })
   }
 
+  # da
+  {
+    # 轉換原始資料
+   
+  }
+  
   # page: "decision"
   {
     DPCOC <- reactive({
