@@ -184,10 +184,64 @@ function(input, output, session){
     })
   }
 
-  # da
+  # dAsA
   {
+    # 更新可選擇cluster的總數量
+    observe({
+      maxCluster <- as.integer(input$dAsA_k)
+      updateSelectInput(session, "dAsA_selectCluster", choices = 1:maxCluster)
+    })
+    
     # 轉換原始資料
-   
+    dAsA_clusters <- reactive({
+      kmeans(dAsA_data, input$dAsA_k, nstart = 10, iter.max = 20)
+    })
+    dAsA_selectData <- reactive({
+      dAsA_data %>% 
+        mutate(cluster = dAsA_clusters()$cluster) %>% 
+        filter(cluster == as.integer(input$dAsA_selectCluster)) %>% 
+        select(-cluster) %>% 
+        gather(key = "dimansions", value = "total.ratio") %>%
+        group_by(dimansions) %>% 
+        summarise(n = length(total.ratio), 
+                  total.ratio.mean = mean(total.ratio), 
+                  total.ratio.sd = sd(total.ratio)) %>% 
+        mutate(deltaAsset = sapply(strsplit(dimansions, "-"), "[", 1), 
+               action = sapply(strsplit(dimansions, "-"), "[", 2))
+    })
+    
+    # plot
+    output$dAsA_clusterPlot <- renderPlot({
+      g <- dAsA_selectData() %>% 
+        ggplot(aes(x = deltaAsset, y = total.ratio.mean, fill = action)) +
+        geom_bar(stat = "identity", position = "dodge") + 
+        coord_cartesian(ylim = c(0, 0.4)) 
+      g
+    })
+    
+    output$dAsA_fvizPlot <- renderPlot({
+      g <- fviz_cluster(dAsA_clusters(),          # 分群結果
+                        data = dAsA_data,         # 資料
+                        geom = c("point","text"), # 點和標籤(point & label)
+                        frame.type = "norm") +    # 框架型態
+        theme_bw()
+      g
+    })
+    
+    output$dAsA_elbowPlot <- renderPlot({
+      g <- fviz_nbclust(dAsA_data, 
+                        FUNcluster = kmeans,# K-Means
+                        method = "wss",     # total within sum of square
+                        k.max = 12) +       # max number of clusters to consider
+        labs(title="Elbow Method for K-Means") +
+        theme_bw()
+      g
+    })
+    
+    output$dAsA_dendPlot <- renderPlot({
+      g <- fviz_dend(hkmeans(dAsA_data, input$dAsA_k), cex = 0.6)
+      g
+    })
   }
   
   # page: "decision"

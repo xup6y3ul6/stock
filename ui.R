@@ -102,33 +102,36 @@ navbarPage(
     )
   },
   
-  # [da](delta asset & action)
+  # [dAsA](delta asset & action)
   # "deltaAsset((i-j),t)-Action(i,t): K-means"
   {
     tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta Asset_{i-j}^t\\)")),
       headerPanel(
-        "當期雙方的總資產差異與自己的決策，做Kmeans clustering"
+        "當期雙方的總資產差異與自己的決策，做K-means clustering"
       ),
       
       sidebarPanel(
-        numericInput("da_k", "Cluster count", 4,
-                     min = 1, max = 9)
+        numericInput("dAsA_k", "Number of Clusters", 4,
+                     min = 1, max = 9),
+        selectInput("dAsA_selectCluster", "Select: cluster",
+                    choices = 1:4, selected = 1)
       ),
       
       mainPanel(
-        plotOutput("da_FvizPlot"),
-        plotOutput("da_ElbowPlot"),
-        plotOutput("da_DendPlot")
+        plotOutput("dAsA_clusterPlot"),
+        plotOutput("dAsA_fvizPlot"),
+        plotOutput("dAsA_elbowPlot"),
+        plotOutput("dAsA_dendPlot")
       )
     )
   },
   
   
-  # delta Asset(t) vs. Action(t): K-means
+  # PriceChange(t) vs. Action(t): K-means
   {tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta P^t \\)")),
     headerPanel(
       "股票變化(漲/持平/跌)與決策配對(買/不買不賣/賣)"
-    ),
+    ), 
     sidebarPanel(
       sliderInput("d_TrialRange", "trial range",
                   min = 1, max = 100, value = c(1, 100)),
@@ -155,7 +158,7 @@ navbarPage(
         ""
       ),
       sidebarPanel(
-        numericInput('d_Clusters', 'Cluster count', 4,
+        numericInput('d_Clusters', 'Number of Clusters', 4,
                      min = 1, max = 12),
         selectInput("d_selectCluster", "Select: cluster",
                     choices = 1:4, selected = 1)
