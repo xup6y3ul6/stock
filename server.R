@@ -216,7 +216,11 @@ function(input, output, session){
                   total.ratio.sd = sd(total.ratio)) %>% 
         ggplot(aes(x = deltaAsset, y = total.ratio.mean, fill = action)) +
         geom_bar(stat = "identity", position = "dodge") + 
-        coord_cartesian(ylim = c(0, 0.4)) 
+        geom_errorbar(aes(ymin = total.ratio.mean - total.ratio.sd,
+                          ymax = total.ratio.mean + total.ratio.sd),
+                      position = position_dodge(0.9), width = 0.1) +
+        coord_cartesian(ylim = c(0, 0.5)) +
+        theme_bw()
       g
     })
     
@@ -269,11 +273,11 @@ function(input, output, session){
         summarise(Count = length(Decision))
     })
     
-    output$dPlot <- renderPlotly({
+    output$d_plot <- renderPlot({
       g <- ggplot(DPCOC(), aes(x = PriceChange, y = Count, fill = Decision)) +
         geom_bar(stat = "identity", position = "dodge") + 
         theme_bw()
-      ggplotly(g)
+      g
     })
     
     dMat <- reactive({
@@ -291,7 +295,7 @@ function(input, output, session){
       dMat
     })
     
-    output$dkmeanPlot <- renderPlot({
+    output$d_kmeanPlot <- renderPlot({
       g <- fviz_nbclust(dMat(), 
                        FUNcluster = kmeans,# K-Means
                        method = "wss",     # total within sum of square
@@ -301,7 +305,7 @@ function(input, output, session){
       g
     })
     
-    output$dDendPlot <- renderPlot({
+    output$d_dendPlot <- renderPlot({
       g <- fviz_dend(hkmeans(dMat(), input$d_Clusters), cex = 0.6)
       g
     })
@@ -328,7 +332,7 @@ function(input, output, session){
       dClusterTable %>% select(cluster, player, 1:9)
     })
     
-    output$dClustersTable <- DT::renderDataTable(
+    output$d_clustersTable <- DT::renderDataTable(
       DT::datatable(
         {dClusterTable() %>% 
           filter(cluster == as.integer(input$d_selectCluster))
@@ -346,84 +350,89 @@ function(input, output, session){
         summarise(n = length(ratio.total), 
                   ratio.total.mean = mean(ratio.total), 
                   ratio.total.sd = sd(ratio.total)) %>% 
-        mutate(price_change = sapply(strsplit(dimansions, "-"), "[", 1), 
-               decision = sapply(strsplit(dimansions, "-"), "[", 2))
+        mutate(priceChange = sapply(strsplit(dimansions, "-"), "[", 1), 
+               action = sapply(strsplit(dimansions, "-"), "[", 2))
     })
     
-    output$dSummarise <- renderTable(
+    output$d_summarise <- renderTable(
       dSelectTable() %>% 
-        select(price_change, decision, n, ratio.total.mean, ratio.total.sd)
+        select(priceChange, action, n, ratio.total.mean, ratio.total.sd)
     )
-    output$d2Plot <- renderPlotly({
+    output$d_plot2 <- renderPlot({
       g <- dSelectTable() %>% 
-        ggplot(aes(x = price_change, y = ratio.total.mean, fill = decision)) +
+        ggplot(aes(x = priceChange, y = ratio.total.mean, fill = action)) +
           geom_bar(stat = "identity", position = "dodge") + 
-          coord_cartesian(ylim = c(0, 0.35)) 
-      ggplotly(g)
+          geom_errorbar(aes(ymin = ratio.total.mean - ratio.total.sd,
+                            ymax = ratio.total.mean + ratio.total.sd),
+                        position = position_dodge(0.9), width = 0.1) +
+          coord_cartesian(ylim = c(0, 0.35)) +
+          theme_bw()
+      g
+    })
+    
+    output$d_tTestPlot <- renderPlot({
+      g <- dClusterTable() %>% 
+        filter(cluster == as.integer(input$d_selectCluster)) %>% 
+        gather(key = "dimansions", value = "ratio.total", -cluster, -player) %>%
+        mutate(priceChange = sapply(strsplit(dimansions, "-"), "[", 1), 
+               action = sapply(strsplit(dimansions, "-"), "[", 2)) %>% 
+        ggplot(aes(x = action, y = ratio.total, color = action)) +
+        geom_boxplot() + 
+        geom_jitter(position = position_jitter(0.2), alpha = I(0.25)) +
+        facet_grid(. ~ priceChange) +
+        theme_bw()
+      g + stat_compare_means(method = "t.test", paired = TRUE, 
+                             comparisons = list(c("buy", "no trade"), c("no trade", "sell"), c("buy", "sell")),
+                             label = "p.signif",
+                             label.y = c(0.6, 0.65, 0.7))
     })
   }
   # predict cluster
   {
     predictTable <- reactive({
-      .select <- dDF %>% 
-        filter(Player == as.integer(input$d_Player)) %>% 
-        slice(-101)
-      range <- as.integer(input$d_Range)
-      # by rolling
-      .data <- c() 
+      .predictList <- list()
       
-      for(i in 1:(100-range+1)){
-        . <- .select %>% slice(i:(i+range))
-        .table <- table(.$PriceChange, .$Decision)
-        .mat <- matrix(t(.table), nrow = 1)
-        .mat <- .mat / rowSums(.mat) 
-        colnames(.mat) <- c("FALL-buy","FALL-no trade","FALL-sell",
-                            "RISE-buy","RISE-no trade","RISE-sell",
-                            "STALL-buy","STALL-no trade","STALL-sell")
-        .data <- rbind(.data, .mat)
+      for(i in 1:numOfData){
+        .select <- dDF %>% 
+          filter(Player == i) %>% 
+          slice(-101)
+        
+        .list <- list(
+          .balence <- slice(.select %>% slice(1:20)),
+          .bubble <- slice(.select %>% slice(21:60)),
+          .bal_bab <- slice(.select %>% slice(1:60)),
+          .burst <- slice(.select %>% slice(61:100)),
+          .all <- .select
+        )
+        .ratio <- c()
+        for(.index in 1:length(.list)){
+          . <- .list[[.index]]
+          .table <- table(.$PriceChange, .$Decision)
+          .mat <- matrix(t(.table), nrow = 1)
+          .mat <- .mat / rowSums(.mat) 
+          colnames(.mat) <- c("FALL-buy","FALL-no trade","FALL-sell",
+                              "RISE-buy","RISE-no trade","RISE-sell",
+                              "STALL-buy","STALL-no trade","STALL-sell")
+          .ratio <- rbind(.ratio, .mat)
+        }
+        .cluster <- predict_KMeans(.ratio, .dKmeans()$centers)
+        class(.cluster) <- NULL
+        .predictList[[i]] <- .cluster
       }
       
-      .cluster <- predict_KMeans(.data, .dKmeans()$centers)
-      class(.cluster) <- NULL
-      .select$ClusterByRolling <- c(rep(NA, range-1), .cluster)
-      
-      # by 3 stages
-      .data2 <- c()
-      .list <- list(
-        .balence <- slice(.select %>% slice(1:20)),
-        .bubble <- slice(.select %>% slice(21:60)),
-        .burst <- slice(.select %>% slice(61:100))
-      )
-      for(.index in 1:3){
-        . <- .list[[.index]]
-        .table <- table(.$PriceChange, .$Decision)
-        .mat <- matrix(t(.table), nrow = 1)
-        .mat <- .mat / rowSums(.mat) 
-        colnames(.mat) <- c("FALL-buy","FALL-no trade","FALL-sell",
-                            "RISE-buy","RISE-no trade","RISE-sell",
-                            "STALL-buy","STALL-no trade","STALL-sell")
-        .data2 <- rbind(.data2, .mat)
-      }
-      .cluster2 <- predict_KMeans(.data2, .dKmeans()$centers)
-      class(.cluster2) <- NULL
-      .select$ClusterByStages <- rep(.cluster2, times = c(20, 40, 40))
-      
-      .select
+      predictTable <- as.data.frame(do.call("rbind", .predictList))
+      names(predictTable) <- c("Balance(1-20)", "Bubble(21-60)", 
+                               "Bal+Bub(1-60)", "Burst(61-100)", "All(1-100)")
+      predictTable$Player <- 1:numOfData
+      predictTable$Pair <- rep(1:numOfPair, each = 2)
+      predictTable$Outcome <- sapply(data, function(.){.$Outcome[1]})
+      return(predictTable)
     })
     
-    output$dPredictByStages <- renderTable({
-      . <- data.frame(predictTable()$Player[1],
-                      as.integer(predictTable()$ClusterByStages[1]),
-                      as.integer(predictTable()$ClusterByStages[21]),
-                      as.integer(predictTable()$ClusterByStages[61]))
-      names(.) = c("Player", "Balance(1-20)", "Bubble(21-60)", "burst(61-100)")
-      .
-    })
-    
-    output$dPredictTable <-  DT::renderDataTable(
+    output$d_predictTable <- DT::renderDataTable(
       DT::datatable(
         {predictTable() %>% 
-          select(Player, Trials, PriceChange, Decision, ClusterByStages, ClusterByRolling)
+            select(Player, Pair, `Balance(1-20)`:`All(1-100)`, Outcome)
         },
         options = list(paging = FALSE),
         rownames = FALSE

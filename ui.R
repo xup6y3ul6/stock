@@ -127,68 +127,57 @@ navbarPage(
     )
   },
   
-  
+  # [d]
   # PriceChange(t) vs. Action(t): K-means
   {tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta P^t \\)")),
     headerPanel(
       "股票變化(漲/持平/跌)與決策配對(買/不買不賣/賣)"
     ), 
-    sidebarPanel(
-      sliderInput("d_TrialRange", "trial range",
-                  min = 1, max = 100, value = c(1, 100)),
-      checkboxGroupInput("OC", "Select: win or loss player",
-                         choices = levels(dDF$Outcome), selected = levels(dDF$Outcome)),
-      checkboxGroupInput("CH", "Select: if player checked history in trials",
-                         choices = levels(dDF$CheckHistory), selected = levels(dDF$CheckHistory)),
-      checkboxGroupInput("no.player", "Select: the players",
-                         choices = unique(dDF$Player),
-                         selected = unique(dDF$Player), 
-                         inline = TRUE)
-    ),
-    mainPanel(
-      plotlyOutput("dPlot"),
-      plotOutput("dkmeanPlot"),
-      plotOutput("dDendPlot")
+    
+    tabsetPanel(
+      tabPanel("K-means",
+        sidebarPanel(
+          sliderInput("d_TrialRange", "trial range",
+                      min = 1, max = 100, value = c(1, 100)),
+          checkboxGroupInput("OC", "Select: win or loss player",
+                             choices = levels(dDF$Outcome), selected = levels(dDF$Outcome)),
+          checkboxGroupInput("CH", "Select: if player checked history in trials",
+                             choices = levels(dDF$CheckHistory), selected = levels(dDF$CheckHistory)),
+          checkboxGroupInput("no.player", "Select: the players",
+                             choices = unique(dDF$Player),
+                             selected = unique(dDF$Player), 
+                             inline = TRUE)
+        ),
+        mainPanel(
+          plotOutput("d_plot"),
+          plotOutput("d_kmeanPlot"),
+          plotOutput("d_dendPlot")
+          
+        )
+      ),
       
-    )
-  )},
-  # decision2
-  {
-    tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta P^t\\text{ by Cluster}\\)")),
-      headerPanel(
-        ""
-      ),
-      sidebarPanel(
+      tabPanel("by Cluster",
+        sidebarPanel(
         numericInput('d_Clusters', 'Number of Clusters', 4,
-                     min = 1, max = 12),
+                    min = 1, max = 12),
         selectInput("d_selectCluster", "Select: cluster",
-                    choices = 1:4, selected = 1)
+                   choices = 1:4, selected = 1)
+        ),
+        mainPanel(
+        plotOutput("d_plot2"),
+        plotOutput("d_tTestPlot"),
+        tableOutput("d_summarise"),
+        DT::dataTableOutput("d_clustersTable")
+        )
       ),
-      mainPanel(
-        plotlyOutput("d2Plot"),
-        tableOutput("dSummarise"),
-        DT::dataTableOutput("dClustersTable")
-      )
-                      
-    )
-  },
-  
-  # decision predict
-  {
-    tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta P^t\\text{ by Phase}\\)")),
-      headerPanel("try to predict cluster"),
-      sidebarPanel(
-        selectInput("d_Player", "Select: player",
-                    choices = unique(dDF$Player)),
-        selectInput("d_Range", "Select: trial range for rolling meaning", 
-                    choices = 1:50, 
-                    selected = 25)
-      ),
-      mainPanel(
-        tableOutput("dPredictByStages"),
-        DT::dataTableOutput("dPredictTable")
+      
+      tabPanel("by Phase",
+        
+        mainPanel(
+          DT::dataTableOutput("d_predictTable")
+        )         
       )
     )
-  }
-  
+  )}
+
 )

@@ -141,23 +141,7 @@
   }
   dAsA_data <- as.data.frame(do.call("rbind", .list))
   names(dAsA_data) <- c("LEADING-buy", "LEADING-no trade", "LEADING-sell",
-                   "COINCIDENT-buy", "COINCIDENT-no trade", "COINCIDENT-sell",
-                   "LAGGING-buy", "LAGGING-no trade", "LAGGING-sell")
+                        "COINCIDENT-buy", "COINCIDENT-no trade", "COINCIDENT-sell",
+                        "LAGGING-buy", "LAGGING-no trade", "LAGGING-sell")
 }
-
-###
-# .d <- dAsA_data %>% 
-#   mutate(cluster = test$cluster) %>% 
-#   gather(key = "dimansions", value = "ratio", -cluster) %>% 
-#   mutate(deltaAsset = sapply(strsplit(dimansions, "-"), "[", 1), 
-#          action = sapply(strsplit(dimansions, "-"), "[", 2))
-# 
-# p <- .d %>% 
-#   ggplot(aes(x = action, y = ratio, color = action)) +
-#   geom_boxplot() + 
-#   geom_jitter(position = position_jitter(0.2), alpha = I(0.25)) +
-#   facet_grid(. ~ deltaAsset) +
-#   theme_bw()
-# p
-
 
