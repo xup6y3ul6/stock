@@ -216,10 +216,10 @@ function(input, output, session){
                   total.ratio.sd = sd(total.ratio)) %>% 
         ggplot(aes(x = deltaAsset, y = total.ratio.mean, fill = action)) +
         geom_bar(stat = "identity", position = "dodge") + 
-        geom_errorbar(aes(ymin = total.ratio.mean - total.ratio.sd,
+        geom_errorbar(aes(ymin = ifelse((total.ratio.mean - total.ratio.sd) > 0, total.ratio.mean - total.ratio.sd, 0),
                           ymax = total.ratio.mean + total.ratio.sd),
                       position = position_dodge(0.9), width = 0.1) +
-        coord_cartesian(ylim = c(0, 0.5)) +
+        coord_cartesian(ylim = c(input$dAsA_ylim[1], input$dAsA_ylim[2])) +
         theme_bw()
       g
     })
@@ -358,19 +358,19 @@ function(input, output, session){
       dSelectTable() %>% 
         select(priceChange, action, n, ratio.total.mean, ratio.total.sd)
     )
-    output$d_plot2 <- renderPlot({
+    output$d_plot2 <- renderPlotly({
       g <- dSelectTable() %>% 
         ggplot(aes(x = priceChange, y = ratio.total.mean, fill = action)) +
           geom_bar(stat = "identity", position = "dodge") + 
-          geom_errorbar(aes(ymin = ratio.total.mean - ratio.total.sd,
+          geom_errorbar(aes(ymin = ifelse((ratio.total.mean - ratio.total.sd) > 0, ratio.total.mean - ratio.total.sd, 0),
                             ymax = ratio.total.mean + ratio.total.sd),
                         position = position_dodge(0.9), width = 0.1) +
-          coord_cartesian(ylim = c(0, 0.35)) +
+          coord_cartesian(ylim = c(input$d_ylim[1], input$d_ylim[2])) +
           theme_bw()
-      g
+      ggplotly(g)
     })
     
-    output$d_tTestPlot <- renderPlot({
+    output$d_testPlot <- renderPlot({
       g <- dClusterTable() %>% 
         filter(cluster == as.integer(input$d_selectCluster)) %>% 
         gather(key = "dimansions", value = "ratio.total", -cluster, -player) %>%
@@ -381,10 +381,10 @@ function(input, output, session){
         geom_jitter(position = position_jitter(0.2), alpha = I(0.25)) +
         facet_grid(. ~ priceChange) +
         theme_bw()
-      g + stat_compare_means(method = "t.test", paired = TRUE, 
+      g + stat_compare_means(method = input$d_testMethod, paired = TRUE, 
                              comparisons = list(c("buy", "no trade"), c("no trade", "sell"), c("buy", "sell")),
                              label = "p.signif",
-                             label.y = c(0.6, 0.65, 0.7))
+                             label.y = c(0.4, 0.45, 0.5))
     })
   }
   # predict cluster
@@ -438,6 +438,20 @@ function(input, output, session){
         rownames = FALSE
       )
     )
+    
+    output$d_downloadData <- downloadHandler(
+      filename = function(){
+        paste0("dP&A_Kmeans_prdictTable_k_", input$d_Clusters, "_", 
+               "range_", input$d_TrialRange[1], "-", input$d_TrialRange[2],".csv")
+      },
+      content = function(file){
+        .download <- predictTable() %>% 
+          select(Player, Pair, `Balance(1-20)`:`All(1-100)`, Outcome)
+        write.csv(.download, file)
+      }
+  
+    )
+    
   }
   
   

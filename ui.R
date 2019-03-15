@@ -111,10 +111,12 @@ navbarPage(
       ),
       
       sidebarPanel(
-        numericInput("dAsA_k", "Number of Clusters", 4,
+        numericInput("dAsA_k", "Number of Clusters", 6,
                      min = 1, max = 9),
         selectInput("dAsA_selectCluster", "Select: cluster",
-                    choices = 1:4, selected = 1)
+                    choices = 1:6, selected = 1),
+        sliderInput("dAsA_ylim", "Select: y axis range", 
+                    min = 0, max = 1, value = c(0, 0.5), step = 0.05)
       ),
       
       mainPanel(
@@ -161,11 +163,16 @@ navbarPage(
         numericInput('d_Clusters', 'Number of Clusters', 4,
                     min = 1, max = 12),
         selectInput("d_selectCluster", "Select: cluster",
-                   choices = 1:4, selected = 1)
+                   choices = 1:4, selected = 1),
+        sliderInput("d_ylim", "Select: y axis range", 
+                    min = 0, max = 1, value = c(0, 0.35), step = 0.05),
+        hr(),
+        selectInput("d_testMethod", "Select: test",
+                    choices = c("wilcox.test", "t.test"))
         ),
         mainPanel(
-        plotOutput("d_plot2"),
-        plotOutput("d_tTestPlot"),
+        plotlyOutput("d_plot2"),
+        plotOutput("d_testPlot"),
         tableOutput("d_summarise"),
         DT::dataTableOutput("d_clustersTable")
         )
@@ -174,6 +181,7 @@ navbarPage(
       tabPanel("by Phase",
         
         mainPanel(
+          downloadButton('d_downloadData', label = '點此下載下表'),
           DT::dataTableOutput("d_predictTable")
         )         
       )
