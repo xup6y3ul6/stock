@@ -186,6 +186,84 @@ navbarPage(
         )         
       )
     )
-  )}
+  )},
 
+  # [dc]
+  # deltaPrice & Action correct!
+  tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta P^t\\,adjust\\)")),
+    headerPanel(
+      "股票變化(漲/持平/跌)與決策配對(買/不買不賣/賣)"
+    ), 
+    h3("依照各個股票變化情境下，對行為做百分比"),
+    tabsetPanel(
+      tabPanel("K-means",
+        sidebarPanel(
+          sliderInput("dc_trialRange", "trial range",
+                      min = 1, max = 100, value = c(1, 100))
+          # checkboxGroupInput("dc_OC", "Select: win or loss player",
+          #                    choices = levels(dDF$Outcome), selected = levels(dDF$Outcome)),
+          # checkboxGroupInput("dc_CH", "Select: if player checked history in trials",
+          #                    choices = levels(dDF$CheckHistory), selected = levels(dDF$CheckHistory)),
+          # checkboxGroupInput("dc_no.player", "Select: the players",
+          #                    choices = unique(dDF$Player),
+          #                    selected = unique(dDF$Player), 
+          #                    inline = TRUE)
+        ),
+        mainPanel(
+          plotOutput("dc_overAllPlot"),
+          plotOutput("dc_kmeanPlot"),
+          plotOutput("dc_dendPlot")
+        )
+      ),
+      
+      tabPanel("by Cluster", 
+        sidebarPanel(
+          numericInput('dc_k', 'Number of Clusters', 4,
+                       min = 1, max = 12),
+          selectInput("dc_selectCluster", "Select: cluster",
+                      choices = 1:4, selected = 1),
+          selectInput("dc_clusterMethod", "Select: cluster method",
+                      choices = c("kmeans", "hkmeans")),
+          sliderInput("dc_ylim", "Select: y axis range", 
+                      min = 0, max = 1, value = c(0, 0.8), step = 0.05)
+          
+        ),
+        mainPanel(
+          plotlyOutput("dc_clusterPlot"),
+          tableOutput("dc_summarise"),
+          DT::dataTableOutput("dc_clustersTable")
+        )
+      ),
+      
+      tabPanel("MLE & LR test",
+        sidebarPanel(
+          hr("Condition"),
+          selectInput("dc_mleCluster", "Select: cluster", 
+                      choices = 1:4, selected = 1),
+          selectInput("dc_mleDPCondi", "Select: delta Price condition",
+                      choices = c("FALL", "RISE", "STALL")),
+          
+          hr(),
+          h4("General model"),
+          
+          hr(),
+          h4("Restric model"),
+          selectInput("dc_mleResModel", "Select: restric model",
+                      choices = c("df=1 (p = q unknown)",
+                                  "df=1 (p = r unknown)",
+                                  "df=1 (q = r unknown)",
+                                  "df=0 (p,q,r given)")),
+          
+          uiOutput(outputId = "dc_mleRes_pqr")
+          
+        ),
+        mainPanel(
+          plotlyOutput("dc_mlePlot"),
+          tableOutput("dc_mleParameter"),
+          tableOutput("dc_LRtest")
+        )
+      )
+      
+    )
+  )
 )

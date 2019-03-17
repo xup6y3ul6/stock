@@ -312,7 +312,7 @@ function(input, output, session){
     
     
   }
-  # decision2
+  # d_decision2
   {
     observe({
       maxCluster <- as.integer(input$d_Clusters)
@@ -386,8 +386,9 @@ function(input, output, session){
                              label = "p.signif",
                              label.y = c(0.4, 0.45, 0.5))
     })
+    
   }
-  # predict cluster
+  # d_predict cluster
   {
     predictTable <- reactive({
       .predictList <- list()
@@ -455,4 +456,257 @@ function(input, output, session){
   }
   
   
+  # dc_kmeans
+  {
+    dc_data <- reactive({
+      . <- dDF %>% 
+        filter(Trials >= input$dc_trialRange[1], Trials <= input$dc_trialRange[2])
+      .table <- table(.$Player, .$Decision, .$PriceChange)
+      
+      
+      .nPlayer <- dim(.table)[1] #table(.$Player,,)
+      .dMat <- matrix(.table, nrow = .nPlayer)
+      .fallSum <- rowSums(.dMat[, 1:3])
+      .riseSum <- rowSums(.dMat[, 4:6])
+      .stallSum <- rowSums(.dMat[, 7:9])
+      .dMat2 <- cbind(
+        .dMat[, 1:3] / .fallSum, 
+        .dMat[, 4:6] / .riseSum, 
+        .dMat[, 7:9] / .stallSum
+      ) 
+      colnames(.dMat2) <- c("FALL-buy","FALL-no trade","FALL-sell",
+                            "RISE-buy","RISE-no trade","RISE-sell",
+                            "STALL-buy","STALL-no trade","STALL-sell")
+      .dMat2
+    })
+    
+    output$dc_overAllPlot <- renderPlot({
+      data <- data.frame(PriceChange = sapply(strsplit(colnames(dc_data()), "-"), "[", 1),
+                         Decision = sapply(strsplit(colnames(dc_data()), "-"), "[", 2),
+                         Ratio = dc_data() %>% apply(2, mean))
+       
+      g <- ggplot(data, aes(x = PriceChange, y = Ratio, fill = Decision)) +
+        geom_bar(stat = "identity", position = "dodge") + 
+        theme_bw()
+      g
+    })
+    
+    output$dc_kmeanPlot <- renderPlot({
+      g <- fviz_nbclust(dc_data(), 
+                        FUNcluster = kmeans,# K-Means
+                        method = "wss",     # total within sum of square
+                        k.max = 12) +       # max number of clusters to consider
+        labs(title="Elbow Method for K-Means") +
+        theme_bw()
+      g
+    })
+    
+    output$dc_dendPlot <- renderPlot({
+      g <- fviz_dend(hkmeans(dc_data(), input$dc_k), cex = 0.6)
+      g
+    })
+    
+  }
+  # dc_clsters
+  {
+    observe({
+      maxCluster <- as.integer(input$dc_k)
+      updateSelectInput(session, "dc_selectCluster", choices = 1:maxCluster)
+      updateSelectInput(session, "dc_mleCluster", choices = 1:maxCluster)
+    })
+    
+    dc_Kmeans <- reactive({
+      set.seed(408516)
+      if (input$dc_clusterMethod == "kmeans") {
+        . <- kmeans(dc_data(), input$dc_k, iter.max = 20, nstart = 30)
+      } else {
+        . <- hkmeans(dc_data(), input$dc_k)
+      }
+      .
+    })
+    
+    dc_clusterTable <- reactive({
+      .clusterTable <- as.data.frame(dc_data())
+      .clusterTable$player <- c(1:160)
+      .clusterTable$cluster <- dc_Kmeans()$cluster
+      return(.clusterTable)
+    })
+    
+    output$dc_clustersTable <- DT::renderDataTable(
+      DT::datatable(
+        {dc_clusterTable() %>% 
+           filter(cluster == as.integer(input$dc_selectCluster))
+        },
+        options = list(paging = FALSE)
+      )
+    )
+    
+    dc_selectTable <- reactive({
+      dc_clusterTable() %>% 
+        filter(cluster == as.integer(input$dc_selectCluster)) %>% 
+        gather(key = "dimansions", value = "ratio", -cluster, -player) %>% 
+        select(-c(cluster, player)) %>% 
+        group_by(dimansions) %>% 
+        summarise(n = length(ratio), 
+                  ratio.total.mean = mean(ratio), 
+                  ratio.total.sd = sd(ratio)) %>% 
+        mutate(priceChange = sapply(strsplit(dimansions, "-"), "[", 1), 
+               action = sapply(strsplit(dimansions, "-"), "[", 2))
+    })
+    
+    output$dc_clusterPlot <- renderPlotly({
+      g <- dc_selectTable() %>% 
+        ggplot(aes(x = priceChange, y = ratio.total.mean, fill = action)) +
+        geom_bar(stat = "identity", position = "dodge") + 
+        geom_errorbar(aes(ymin = ifelse((ratio.total.mean - ratio.total.sd) > 0, ratio.total.mean - ratio.total.sd, 0),
+                          ymax = ratio.total.mean + ratio.total.sd),
+                      position = position_dodge(0.9), width = 0.1) +
+        coord_cartesian(ylim = c(input$dc_ylim[1], input$dc_ylim[2])) +
+        theme_bw()
+      ggplotly(g)
+    })
+    
+    output$dc_summarise <- renderTable(
+      dc_selectTable() %>% 
+        select(priceChange, action, n, ratio.total.mean, ratio.total.sd)
+    )
+    
+  }
+  # dc_MLE & LR test
+  {
+    dc_mleData <- reactive({
+      dc_clusterTable() %>% 
+        as.data.frame() %>% 
+        filter(cluster == as.integer(input$dc_mleCluster)) %>% 
+        select(switch(input$dc_mleDPCondi,
+          "FALL" = 1:3,   # "FAll-buy":"FALL-sell"
+          "RISE" = 4:6,   # "RISE-buy":"RISE-sell"
+          "STALL"= 7:9))  # "STAll-buy":"STALL-sell"
+        
+    }) 
+
+    output$dc_mlePlot <- renderPlotly({
+      .data <- dc_clusterTable() %>% 
+        filter(cluster == as.integer(input$dc_mleCluster)) %>% 
+        gather(key = "dimansions", value = "ratio", -cluster, -player) %>% 
+        select(-c(cluster, player)) %>% 
+        group_by(dimansions) %>% 
+        summarise(n = length(ratio), 
+                  ratio.total.mean = mean(ratio), 
+                  ratio.total.sd = sd(ratio)) %>% 
+        mutate(priceChange = sapply(strsplit(dimansions, "-"), "[", 1), 
+               action = sapply(strsplit(dimansions, "-"), "[", 2)) %>% 
+        filter(priceChange == input$dc_mleDPCondi)
+      g <- ggplot(.data, aes(x = priceChange, y = ratio.total.mean, fill = action)) +
+        geom_histogram(stat = "identity", position = "dodge") + 
+        theme_bw()
+      ggplotly(g)
+    })
+    
+    # nll function
+    nll_condition <- function(par, x, condition) {
+      p <- vector("numeric", length = 3)
+      
+      switch(condition, 
+             "df2"         = {p[1] <- par[1];  p[2] <- par[2];  p[3] <- 1-par[1]-par[2]},
+             "df1:same_pq" = {p[1] <- par;     p[2] <- par;     p[3] <- 1-2*par},
+             "df1:same_pr" = {p[1] <- par;     p[2] <- 1-2*par; p[3] <- par},
+             "df1:same_qr" = {p[1] <- 1-2*par; p[2] <- par;     p[3] <- par},
+             "df0"         = {p[1] <- par[1];  p[2] <- par[2];  p[3] <- par[3]}
+      )
+      
+      logLike <- sum(x * log(p)) # omit constant
+      return(-logLike)
+    }
+    nll <- function(parameters, data, condition) {
+      negLogLike <- 0
+      parLogis <- plogis(parameters) # restric in 0~1
+      n <- nrow(data)
+      for (i in 1:n) {
+        .x <- data[i, ]
+        negLogLike <- negLogLike + nll_condition(parLogis, .x, condition)
+      }
+      return(negLogLike)
+    }
+    
+    dc_generalModel <- reactive({
+      .par2 <- qlogis(rep(1 / 3, 2)) # gives abitrary initial value
+      .result <- nlm(nll, .par2, data = dc_mleData(), condition = "df2")
+      return(.result)
+    })
+    
+    output$dc_mleRes_pqr <- renderUI({
+      if (input$dc_mleResModel == "df=0 (p,q,r given)") {
+        tagList(textInput("dc_mleRes_p", "p", value = "0.2"),
+                textInput("dc_mleRes_q", "q", value = "0.3"),
+                textInput("dc_mleRes_r", "r (1-p-q, automatic)", value = "0.5"))
+      }
+    })
+    
+    observe({
+      .p <- as.numeric(input$dc_mleRes_p)
+      .q <- as.numeric(input$dc_mleRes_q)
+      .r <- 1-.p-.q
+      updateTextInput(session, "dc_mleRes_r", value = as.character(.r))
+    })
+    
+  
+    dc_restricModel <- reactive({ 
+      if (input$dc_mleResModel == "df=0 (p,q,r given)") {
+        .pqrGiven <-  as.numeric(c(input$dc_mleRes_p, input$dc_mleRes_q, input$dc_mleRes_r))
+        parameter_restric <- qlogis(.pqrGiven)
+        df_restric <- 0
+        nll_restric <- nll(parameter_restric, dc_mleData(), "df0")
+        .result <- list(nll_restric, parameter_restric)
+        names(.result) <- c("minimum", "estimate")
+        return(.result)
+      } else {
+        parameter_restric <- qlogis(c(0.1)) # gives abitrary initial value
+        df_restric <- 1
+        .condition <- switch(input$dc_mleResModel,
+                             "df=1 (p = q unknown)" = "df1:same_pq",
+                             "df=1 (p = r unknown)" = "df1:same_pr",
+                             "df=1 (q = r unknown)" = "df1:same_qr")
+        .result <- nlm(nll, parameter_restric, dc_mleData(), condition = .condition)
+        return(.result)
+      }
+    }) 
+    
+    output$dc_mleParameter <- renderTable({
+      .parName <- c("p_buy", "q_noTrade", "r_sell")
+      .parEstimate_gen <- plogis(dc_generalModel()$estimate)
+      .parEstimate_gen[3] <- 1 - sum(.parEstimate_gen)
+      
+      .parEstimate_res <- vector("numeric", length = 3)
+      switch(input$dc_mleResModel,
+             "df=1 (p = q unknown)" = {.parEstimate_res[c(1, 2)] <- plogis(dc_restricModel()$estimate)
+                                       .parEstimate_res[3] <- 1 - sum(.parEstimate_res)},
+             "df=1 (p = r unknown)" = {.parEstimate_res[c(1, 3)] <- plogis(dc_restricModel()$estimate)
+                                       .parEstimate_res[2] <- 1 - sum(.parEstimate_res)},
+             "df=1 (q = r unknown)" = {.parEstimate_res[c(2, 3)] <- plogis(dc_restricModel()$estimate)
+                                       .parEstimate_res[1] <- 1 - sum(.parEstimate_res)},
+             "df=0 (p,q,r given)" = {.parEstimate_res <- plogis(dc_restricModel()$estimate)})
+      
+      data.frame(.parName, .parEstimate_gen, .parEstimate_res)
+    })
+    
+    output$dc_LRtest <- renderTable({
+      nll_general <- dc_generalModel()$minimum
+      df_general <- length(dc_generalModel()$estimate)
+      
+      nll_restric <- dc_restricModel()$minimum
+      df_restric <- ifelse(length(dc_restricModel()$estimate) == 3, 0, length(dc_restricModel()$estimate))
+      
+      G2 <- 2 * (nll_restric - nll_general)
+      chisqCriteria <- qchisq(0.95, df = df_general - df_restric)
+      pvalue = 1 - pchisq(G2, df = df_general - df_restric)
+      if (pvalue <= 0.001) significance <- "***"
+      else if (pvalue <= 0.01) significance <- "**"
+      else if (pvalue <= 0.05) significance <- "*"
+      else significance <- "ns"
+      data.frame(nll_restric, df_restric, nll_general, df_general,
+                 G2, chisqCriteria, pvalue, significance)
+
+    })
+  }
 }
