@@ -477,9 +477,16 @@ function(input, output, session){
       colnames(.dMat2) <- c("FALL-buy","FALL-no trade","FALL-sell",
                             "RISE-buy","RISE-no trade","RISE-sell",
                             "STALL-buy","STALL-no trade","STALL-sell")
-      .dMat2
+      
+      if (as.logical(input$dc_na.rm) == TRUE) {
+        if (sum(is.na(.dMat2)) > 0) {
+          rmRow <- unique(which(is.na(.dMat2)) %% .nPlayer)
+          .dMat2 <- .dMat2[-rmRow, ]
+        } 
+      }
+      return(.dMat2)
     })
-    
+
     output$dc_overAllPlot <- renderPlot({
       data <- data.frame(PriceChange = sapply(strsplit(colnames(dc_data()), "-"), "[", 1),
                          Decision = sapply(strsplit(colnames(dc_data()), "-"), "[", 2),
@@ -487,7 +494,8 @@ function(input, output, session){
        
       g <- ggplot(data, aes(x = PriceChange, y = Ratio, fill = Decision)) +
         geom_bar(stat = "identity", position = "dodge") + 
-        theme_bw()
+        theme_bw() + 
+        coord_cartesian(ylim = c(0, 0.8))
       g
     })
     
@@ -687,7 +695,7 @@ function(input, output, session){
                                        .parEstimate_res[1] <- 1 - sum(.parEstimate_res)},
              "df=0 (p,q,r given)" = {.parEstimate_res <- plogis(dc_restricModel()$estimate)})
       
-      data.frame(.parName, .parEstimate_gen, .parEstimate_res)
+      data.frame(.parName, .parEstimate_res, .parEstimate_gen)
     })
     
     output$dc_LRtest <- renderTable({

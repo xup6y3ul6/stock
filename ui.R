@@ -199,7 +199,7 @@ navbarPage(
       tabPanel("K-means",
         sidebarPanel(
           sliderInput("dc_trialRange", "trial range",
-                      min = 1, max = 100, value = c(1, 100))
+                      min = 1, max = 100, value = c(1, 100)),
           # checkboxGroupInput("dc_OC", "Select: win or loss player",
           #                    choices = levels(dDF$Outcome), selected = levels(dDF$Outcome)),
           # checkboxGroupInput("dc_CH", "Select: if player checked history in trials",
@@ -208,6 +208,8 @@ navbarPage(
           #                    choices = unique(dDF$Player),
           #                    selected = unique(dDF$Player), 
           #                    inline = TRUE)
+          selectInput("dc_na.rm", "NA remove?", 
+                      choices = c("FALSE", "TRUE"), selected = "FALSE")
         ),
         mainPanel(
           plotOutput("dc_overAllPlot"),
@@ -245,6 +247,7 @@ navbarPage(
           
           hr(),
           h4("General model"),
+          "p, q & r are unknown",
           
           hr(),
           h4("Restric model"),
