@@ -5,6 +5,6 @@ account: ebg408
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 570420
-bundleId: 1945492
+bundleId: 1965173
 url: https://ebg408.shinyapps.io/stock/
-when: 1552831382.91342
+when: 1553590504.16975

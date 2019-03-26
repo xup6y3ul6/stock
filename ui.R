@@ -213,6 +213,7 @@ navbarPage(
         ),
         mainPanel(
           plotOutput("dc_overAllPlot"),
+          verbatimTextOutput("dc_rmPlayers"),
           plotOutput("dc_kmeanPlot"),
           plotOutput("dc_dendPlot")
         )
@@ -225,7 +226,7 @@ navbarPage(
           selectInput("dc_selectCluster", "Select: cluster",
                       choices = 1:4, selected = 1),
           selectInput("dc_clusterMethod", "Select: cluster method",
-                      choices = c("kmeans", "hkmeans")),
+                      choices = c("hkmeans", "kmeans")),
           sliderInput("dc_ylim", "Select: y axis range", 
                       min = 0, max = 1, value = c(0, 0.8), step = 0.05)
           
@@ -247,14 +248,20 @@ navbarPage(
           
           hr(),
           h4("General model"),
-          "p, q & r are unknown",
+          selectInput("dc_mleGenModel", "Select: general model",
+                      choices = c("df=2 (p,q,r unknown)",
+                                  "df=2n (p_i,q_i,r_i unknown)")),
           
           hr(),
           h4("Restric model"),
           selectInput("dc_mleResModel", "Select: restric model",
-                      choices = c("df=1 (p = q unknown)",
+                      choices = c("df=2 (p,q,r unknown)",
+                                  "df=1 (p = q unknown)",
                                   "df=1 (p = r unknown)",
                                   "df=1 (q = r unknown)",
+                                  "df=1 (p given)",
+                                  "df=1 (q given)",
+                                  "df=1 (r given)",
                                   "df=0 (p,q,r given)")),
           
           uiOutput(outputId = "dc_mleRes_pqr")
