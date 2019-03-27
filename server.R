@@ -620,15 +620,18 @@ function(input, output, session){
       p <- vector("numeric", length = 3)
       
       switch(condition, 
-             "df2n"        = {p[1] <- par[1];        p[2] <- par[2];        p[3] <- 1-par[1]-par[2]},
-             "df2"         = {p[1] <- par[1];        p[2] <- par[2];        p[3] <- 1-par[1]-par[2]},
-             "df1:same_pq" = {p[1] <- par;           p[2] <- par;           p[3] <- 1-2*par},
-             "df1:same_pr" = {p[1] <- par;           p[2] <- 1-2*par;       p[3] <- par},
-             "df1:same_qr" = {p[1] <- 1-2*par;       p[2] <- par;           p[3] <- par},
-             "df1:given_p" = {p[1] <- par_giv;       p[2] <- par;           p[3] <- 1-par-par_giv},
-             "df1:given_q" = {p[1] <- 1-par-par_giv; p[2] <- par_giv;       p[3] <- par},
-             "df1:given_r" = {p[1] <- par;           p[2] <- 1-par-par_giv; p[3] <- par_giv},
-             "df0"         = {p[1] <- par_giv[1];    p[2] <- par_giv[2];    p[3] <- par_giv[3]}
+             "df2n"        = {p[1] <- par[1];                  p[2] <- par[2];                  p[3] <- 1-par[1]-par[2]},
+             "df2"         = {p[1] <- par[1];                  p[2] <- par[2];                  p[3] <- 1-par[1]-par[2]},
+             "df2:larger_p"= {p[1] <- par[1]+par_giv;          p[2] <- par[2];                  p[3] <- 1-par[1]-par[2]-par_giv},
+             "df2:larger_q"= {p[1] <- 1-par[1]-par[2]-par_giv; p[2] <- par[1]+par_giv;          p[3] <- par[2]},
+             "df2:larger_r"= {p[1] <- par[2];                  p[2] <- 1-par[1]-par[2]-par_giv; p[3] <- par[1]+par_giv},
+             "df1:same_pq" = {p[1] <- par;                     p[2] <- par;                     p[3] <- 1-2*par},
+             "df1:same_pr" = {p[1] <- par;                     p[2] <- 1-2*par;                 p[3] <- par},
+             "df1:same_qr" = {p[1] <- 1-2*par;                 p[2] <- par;                     p[3] <- par},
+             "df1:given_p" = {p[1] <- par_giv;                 p[2] <- par;                     p[3] <- 1-par-par_giv},
+             "df1:given_q" = {p[1] <- 1-par-par_giv;           p[2] <- par_giv;                 p[3] <- par},
+             "df1:given_r" = {p[1] <- par;                     p[2] <- 1-par-par_giv;           p[3] <- par_giv},
+             "df0"         = {p[1] <- par_giv[1];              p[2] <- par_giv[2];              p[3] <- par_giv[3]}
       )
       
       logLike <- sum(x * log(p)) # omit constant
@@ -641,7 +644,7 @@ function(input, output, session){
         parLogis <- plogis(parameters_est) # restric p in 0 ~ 1
       } else {
         parameters_giv <- plogis(parameters_giv)
-        parLogis <- plogis(parameters_est)*(1-sum(parameters_giv))
+        parLogis <- plogis(parameters_est)*(1-parameters_giv)
       }
       
       n <- nrow(data)
@@ -661,29 +664,34 @@ function(input, output, session){
       return(negLogLike)
     }
     
-    dc_generalModel <- reactive({
+    dc_generalModel <- eventReactive(input$dc_update, {
       
       switch(input$dc_mleGenModel,
              "df=2n (p_i,q_i,r_i unknown)" = {.condition <- "df2n"
-                                              .n <- nrow(dc_mleData())
-                                              .parameter_general <- qlogis(rep(1/3, 2*.n))},
+                                              .initiVal<- dc_mleData()[c(1, 2)] %>% as.matrix() %>% t() %>% matrix(ncol = 1) 
+                                              .initiVal <- .initiVal-0.0001 # translate
+                                              .initiVal[which(.initiVal <= 0)] <- .initiVal[which(.initiVal <= 0)]+0.00011 # translate to prevent log(0)
+                                              .parameter_general <- qlogis(.initiVal)},
              "df=2 (p,q,r unknown)" = {.condition <- "df2"
                                        .parameter_general <- qlogis(rep(1/3, 2))}
-             )
+      )
       
-      .result <- nlm(nll, .parameter_general, data = dc_mleData(), condition = .condition)
+      .result <- nlminb(.parameter_general, nll, data = dc_mleData(), condition = .condition, lower = -Inf, upper = Inf)
       return(.result)
     })
     
     output$dc_mleRes_pqr <- renderUI({
      
       switch (input$dc_mleResModel, 
-              "df=0 (p,q,r given)" = tagList(textInput("dc_mleRes_p", "p", value = "0.2"),
-                                             textInput("dc_mleRes_q", "q", value = "0.3"),
-                                             textInput("dc_mleRes_r", "r (1-p-q, automatic)", value = "0.5")),
-              "df=1 (p given)" = textInput("dc_mleRes_1", "p", value = "0.5"),
-              "df=1 (q given)" = textInput("dc_mleRes_1", "q", value = "0.5"), 
-              "df=1 (r given)" = textInput("dc_mleRes_1", "r", value = "0.5"))
+              "df=0 (p,q,r given)" = tagList(textInput("dc_mleRes_p", "p =", value = "0.2"),
+                                             textInput("dc_mleRes_q", "q =", value = "0.3"),
+                                             textInput("dc_mleRes_r", "r = 1-p-q (automatic)", value = "0.5")),
+              "df=1 (p given)" = textInput("dc_mleRes_1", "p =", value = "0.5"),
+              "df=1 (q given)" = textInput("dc_mleRes_1", "q =", value = "0.5"), 
+              "df=1 (r given)" = textInput("dc_mleRes_1", "r =", value = "0.5"),
+              "df=2 (p larger)"= textInput("dc_mleRes_2", "p >=", value = "0.55"),
+              "df=2 (q larger)"= textInput("dc_mleRes_2", "q >=", value = "0.55"),
+              "df=2 (r larger)"= textInput("dc_mleRes_2", "r >=", value = "0.55"))
     })
     
     observe({
@@ -694,11 +702,20 @@ function(input, output, session){
     })
     
   
-    dc_restricModel <- reactive({ 
+    dc_restricModel <- eventReactive(input$dc_update, { 
       .parameter_given <- NULL
       switch(input$dc_mleResModel,
         "df=2 (p,q,r unknown)" = {.condition <- "df2"
-                                  .parameter_restric <- qlogis(rep(1 / 3, 2))},
+                                  .parameter_restric <- qlogis(rep(1/3, 2))},
+        "df=2 (p larger)" = {.condition <- "df2:larger_p"
+                             .parameter_given <- qlogis(as.numeric(input$dc_mleRes_2))
+                             .parameter_restric <- qlogis(rep(1/3, 2))},
+        "df=2 (q larger)" = {.condition <- "df2:larger_q"
+                             .parameter_given <- qlogis(as.numeric(input$dc_mleRes_2))
+                             .parameter_restric <- qlogis(rep(1/3, 2))},
+        "df=2 (r larger)" = {.condition <- "df2:larger_r"
+                             .parameter_given <- qlogis(as.numeric(input$dc_mleRes_2))
+                             .parameter_restric <- qlogis(rep(1/3, 2))},
         "df=1 (p = q unknown)" = {.condition <- "df1:same_pq"
                                   .parameter_restric <- qlogis(c(0.1))},
         "df=1 (p = r unknown)" = {.condition <- "df1:same_pr"
@@ -724,46 +741,58 @@ function(input, output, session){
     }) 
     
     output$dc_mleParameter <- renderTable({
-      .parName <- c("p_buy", "q_noTrade", "r_sell")
-      
-      .parEstimate_gen <- vector("numeric", length = 3)
-      switch(input$dc_mleGenModel,
-             "df=2n (p_i,q_i,r_i unknown)" = {.n <- length(dc_generalModel()$estimate)/2
-                                              .pl_est <- round(plogis(dc_generalModel()$estimate), digits = 3)
-                                              .parEstimate_gen[1] <- paste(.pl_est[seq(1, 2*.n, 2)], collapse = ", ")
-                                              .parEstimate_gen[2] <- paste(.pl_est[seq(2, 2*.n, 2)], collapse = ", ")
-                                              .parEstimate_gen[3] <- paste(1-(.pl_est[seq(1, 2*.n, 2)]+.pl_est[seq(2, 2*.n, 2)]), collapse = ", ")},
-             "df=2 (p,q,r unknown)" = {.parEstimate_gen <- plogis(dc_generalModel()$estimate)
-                                       .parEstimate_gen[3] <- 1 - sum(.parEstimate_gen)}
-      )
-      
-      .parEstimate_res <- vector("numeric", length = 3)
-      switch(input$dc_mleResModel,
-             "df=2 (p,q,r unknown)" = {.parEstimate_res <- plogis(dc_restricModel()$estimate)
-                                       .parEstimate_res[3] <- 1 - sum(.parEstimate_res)},
-             "df=1 (p given)" = {.parEstimate_res[1] <- as.numeric(input$dc_mleRes_1)
-                                 .parEstimate_res[2] <- plogis(dc_restricModel()$estimate)*(1-.parEstimate_res[1])
-                                 .parEstimate_res[3] <- 1-sum(.parEstimate_res)},
-             "df=1 (q given)" = {.parEstimate_res[2] <- as.numeric(input$dc_mleRes_1)
-                                 .parEstimate_res[3] <- plogis(dc_restricModel()$estimate)*(1-.parEstimate_res[2])
-                                 .parEstimate_res[1] <- 1 - sum(.parEstimate_res)},
-             "df=1 (r given)" = {.parEstimate_res[3] <- as.numeric(input$dc_mleRes_1)
-                                 .parEstimate_res[1] <- plogis(dc_restricModel()$estimate)*(1-.parEstimate_res[3])
-                                 .parEstimate_res[2] <- 1 - sum(.parEstimate_res)},
-             "df=1 (p = q unknown)" = {.parEstimate_res[c(1, 2)] <- plogis(dc_restricModel()$estimate)
-                                       .parEstimate_res[3] <- 1 - sum(.parEstimate_res)},
-             "df=1 (p = r unknown)" = {.parEstimate_res[c(1, 3)] <- plogis(dc_restricModel()$estimate)
-                                       .parEstimate_res[2] <- 1 - sum(.parEstimate_res)},
-             "df=1 (q = r unknown)" = {.parEstimate_res[c(2, 3)] <- plogis(dc_restricModel()$estimate)
-                                       .parEstimate_res[1] <- 1 - sum(.parEstimate_res)},
-             "df=0 (p,q,r given)" = {.parEstimate_res <- as.numeric(c(input$dc_mleRes_p, input$dc_mleRes_q, input$dc_mleRes_r))})
-      
-      data.frame(.parName, .parEstimate_res, .parEstimate_gen)
+      input$dc_update
+      isolate({
+        .parName <- c("p_buy", "q_noTrade", "r_sell")
+        
+        .parEstimate_gen <- vector("numeric", length = 3)
+        switch(input$dc_mleGenModel,
+               "df=2n (p_i,q_i,r_i unknown)" = {.n <- length(dc_generalModel()$par)/2
+                                                .pl_est <- round(plogis(dc_generalModel()$par), digits = 3)
+                                                .parEstimate_gen[1] <- paste(.pl_est[seq(1, 2*.n, 2)], collapse = ", ")
+                                                .parEstimate_gen[2] <- paste(.pl_est[seq(2, 2*.n, 2)], collapse = ", ")
+                                                .parEstimate_gen[3] <- paste(round(1-(.pl_est[seq(1, 2*.n, 2)]+.pl_est[seq(2, 2*.n, 2)]), digits = 3), collapse = ", ")},
+               "df=2 (p,q,r unknown)" = {.parEstimate_gen <- plogis(dc_generalModel()$par)
+                                         .parEstimate_gen[3] <- 1 - sum(.parEstimate_gen)}
+        )
+        
+        .parEstimate_res <- vector("numeric", length = 3)
+        switch(input$dc_mleResModel,
+               "df=2 (p,q,r unknown)" = {.parEstimate_res <- plogis(dc_restricModel()$estimate)
+                                         .parEstimate_res[3] <- 1 - sum(.parEstimate_res)},
+               "df=2 (p larger)" = {.parEstimate_res[1] <- plogis(dc_restricModel()$estimate)[1]*(1-as.numeric(input$dc_mleRes_2))+as.numeric(input$dc_mleRes_2)
+                                    .parEstimate_res[2] <- plogis(dc_restricModel()$estimate)[2]*(1-as.numeric(input$dc_mleRes_2))
+                                    .parEstimate_res[3] <- 1-sum(.parEstimate_res)},
+               "df=2 (q larger)" = {.parEstimate_res[2] <- plogis(dc_restricModel()$estimate)[1]*(1-as.numeric(input$dc_mleRes_2))+as.numeric(input$dc_mleRes_2)
+                                    .parEstimate_res[3] <- plogis(dc_restricModel()$estimate)[2]*(1-as.numeric(input$dc_mleRes_2))
+                                    .parEstimate_res[1] <- 1-sum(.parEstimate_res)},
+               "df=2 (r larger)" = {.parEstimate_res[3] <- plogis(dc_restricModel()$estimate)[1]*(1-as.numeric(input$dc_mleRes_2))+as.numeric(input$dc_mleRes_2)
+                                    .parEstimate_res[1] <- plogis(dc_restricModel()$estimate)[2]*(1-as.numeric(input$dc_mleRes_2))
+                                    .parEstimate_res[2] <- 1-sum(.parEstimate_res)},
+               "df=1 (p given)" = {.parEstimate_res[1] <- as.numeric(input$dc_mleRes_1)
+                                   .parEstimate_res[2] <- plogis(dc_restricModel()$estimate)*(1-.parEstimate_res[1])
+                                   .parEstimate_res[3] <- 1-sum(.parEstimate_res)},
+               "df=1 (q given)" = {.parEstimate_res[2] <- as.numeric(input$dc_mleRes_1)
+                                   .parEstimate_res[3] <- plogis(dc_restricModel()$estimate)*(1-.parEstimate_res[2])
+                                   .parEstimate_res[1] <- 1 - sum(.parEstimate_res)},
+               "df=1 (r given)" = {.parEstimate_res[3] <- as.numeric(input$dc_mleRes_1)
+                                   .parEstimate_res[1] <- plogis(dc_restricModel()$estimate)*(1-.parEstimate_res[3])
+                                   .parEstimate_res[2] <- 1 - sum(.parEstimate_res)},
+               "df=1 (p = q unknown)" = {.parEstimate_res[c(1, 2)] <- plogis(dc_restricModel()$estimate)
+                                         .parEstimate_res[3] <- 1 - sum(.parEstimate_res)},
+               "df=1 (p = r unknown)" = {.parEstimate_res[c(1, 3)] <- plogis(dc_restricModel()$estimate)
+                                         .parEstimate_res[2] <- 1 - sum(.parEstimate_res)},
+               "df=1 (q = r unknown)" = {.parEstimate_res[c(2, 3)] <- plogis(dc_restricModel()$estimate)
+                                         .parEstimate_res[1] <- 1 - sum(.parEstimate_res)},
+               "df=0 (p,q,r given)" = {.parEstimate_res <- as.numeric(c(input$dc_mleRes_p, input$dc_mleRes_q, input$dc_mleRes_r))})
+        
+        data.frame(.parName, .parEstimate_res, .parEstimate_gen)
+      })
     })
     
     output$dc_LRtest <- renderTable({
-      nll_general <- dc_generalModel()$minimum
-      df_general <- length(dc_generalModel()$estimate)
+      nll_general <- dc_generalModel()$objective
+      df_general <- length(dc_generalModel()$par)
       
       nll_restric <- dc_restricModel()$minimum
       df_restric <- ifelse(sum(dc_restricModel()$estimate == -99), 0L, length(dc_restricModel()$estimate))
@@ -771,7 +800,7 @@ function(input, output, session){
       G2 <- 2 * (nll_restric - nll_general)
       chisqCriteria <- qchisq(0.95, df = df_general - df_restric)
       pvalue = 1 - pchisq(G2, df = df_general - df_restric)
-      if (pvalue <= 0.001) {ignificance <- "***"
+      if (pvalue <= 0.001) {significance <- "***"
       } else if (pvalue <= 0.01) {significance <- "**"
       } else if (pvalue <= 0.05) {significance <- "*"
       } else {significance <- "ns"

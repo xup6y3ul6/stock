@@ -2,7 +2,7 @@ library(shiny)
 source("data.R")
 
 navbarPage(
-  title = "EBG behavior data",
+  title = "EBG behavior data", selected = "dc",
   # "all data table"
   {tabPanel("All data table",
     titlePanel(
@@ -190,7 +190,7 @@ navbarPage(
 
   # [dc]
   # deltaPrice & Action correct!
-  tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta P^t\\,adjust\\)")),
+  tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta P^t\\,adjust\\)")), value = "dc",
     headerPanel(
       "股票變化(漲/持平/跌)與決策配對(買/不買不賣/賣)"
     ), 
@@ -240,7 +240,7 @@ navbarPage(
       
       tabPanel("MLE & LR test",
         sidebarPanel(
-          hr("Condition"),
+          h4("Condition"),
           selectInput("dc_mleCluster", "Select: cluster", 
                       choices = 1:4, selected = 1),
           selectInput("dc_mleDPCondi", "Select: delta Price condition",
@@ -256,6 +256,9 @@ navbarPage(
           h4("Restric model"),
           selectInput("dc_mleResModel", "Select: restric model",
                       choices = c("df=2 (p,q,r unknown)",
+                                  "df=2 (p larger)",
+                                  "df=2 (q larger)",
+                                  "df=2 (r larger)",
                                   "df=1 (p = q unknown)",
                                   "df=1 (p = r unknown)",
                                   "df=1 (q = r unknown)",
@@ -264,8 +267,8 @@ navbarPage(
                                   "df=1 (r given)",
                                   "df=0 (p,q,r given)")),
           
-          uiOutput(outputId = "dc_mleRes_pqr")
-          
+          uiOutput(outputId = "dc_mleRes_pqr"),
+          actionButton("dc_update", "Update")
         ),
         mainPanel(
           plotlyOutput("dc_mlePlot"),
