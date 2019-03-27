@@ -477,7 +477,10 @@ function(input, output, session){
       colnames(.dMat2) <- c("FALL-buy","FALL-no trade","FALL-sell",
                             "RISE-buy","RISE-no trade","RISE-sell",
                             "STALL-buy","STALL-no trade","STALL-sell")
+<<<<<<< HEAD
       rownames(.dMat2) <- 1:.nPlayer
+=======
+>>>>>>> f4cb980a87437ab52c4f7dddbb903a6cf727f7e1
       
       if (as.logical(input$dc_na.rm) == TRUE) {
         if (sum(is.na(.dMat2)) > 0) {
@@ -487,9 +490,13 @@ function(input, output, session){
       }
       return(.dMat2)
     })
+<<<<<<< HEAD
     
     
     
+=======
+
+>>>>>>> f4cb980a87437ab52c4f7dddbb903a6cf727f7e1
     output$dc_overAllPlot <- renderPlot({
       data <- data.frame(PriceChange = sapply(strsplit(colnames(dc_data()), "-"), "[", 1),
                          Decision = sapply(strsplit(colnames(dc_data()), "-"), "[", 2),
@@ -741,6 +748,7 @@ function(input, output, session){
     }) 
     
     output$dc_mleParameter <- renderTable({
+<<<<<<< HEAD
       input$dc_update
       isolate({
         .parName <- c("p_buy", "q_noTrade", "r_sell")
@@ -788,6 +796,23 @@ function(input, output, session){
         
         data.frame(.parName, .parEstimate_res, .parEstimate_gen)
       })
+=======
+      .parName <- c("p_buy", "q_noTrade", "r_sell")
+      .parEstimate_gen <- plogis(dc_generalModel()$estimate)
+      .parEstimate_gen[3] <- 1 - sum(.parEstimate_gen)
+      
+      .parEstimate_res <- vector("numeric", length = 3)
+      switch(input$dc_mleResModel,
+             "df=1 (p = q unknown)" = {.parEstimate_res[c(1, 2)] <- plogis(dc_restricModel()$estimate)
+                                       .parEstimate_res[3] <- 1 - sum(.parEstimate_res)},
+             "df=1 (p = r unknown)" = {.parEstimate_res[c(1, 3)] <- plogis(dc_restricModel()$estimate)
+                                       .parEstimate_res[2] <- 1 - sum(.parEstimate_res)},
+             "df=1 (q = r unknown)" = {.parEstimate_res[c(2, 3)] <- plogis(dc_restricModel()$estimate)
+                                       .parEstimate_res[1] <- 1 - sum(.parEstimate_res)},
+             "df=0 (p,q,r given)" = {.parEstimate_res <- plogis(dc_restricModel()$estimate)})
+      
+      data.frame(.parName, .parEstimate_res, .parEstimate_gen)
+>>>>>>> f4cb980a87437ab52c4f7dddbb903a6cf727f7e1
     })
     
     output$dc_LRtest <- renderTable({

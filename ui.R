@@ -248,9 +248,13 @@ navbarPage(
           
           hr(),
           h4("General model"),
+<<<<<<< HEAD
           selectInput("dc_mleGenModel", "Select: general model",
                       choices = c("df=2 (p,q,r unknown)",
                                   "df=2n (p_i,q_i,r_i unknown)")),
+=======
+          "p, q & r are unknown",
+>>>>>>> f4cb980a87437ab52c4f7dddbb903a6cf727f7e1
           
           hr(),
           h4("Restric model"),
