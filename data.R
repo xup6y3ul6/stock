@@ -23,12 +23,15 @@
     stopifnot(data[[2*i-1]]$StockPrice == data[[2*i-1]]$StockPrice) 
     # 增加一欄：玩家該場的勝負輸贏
     .lastRow = length(data[[2*i-1]]$p1Cash[!is.na(data[[2*i-1]]$p1Cash)])
-    if(data[[2*i-1]][.lastRow, "p1Cash"] > data[[2*i]][.lastRow, "p2Cash"]){
+    if (data[[2*i-1]][.lastRow, "p1Cash"] > data[[2*i]][.lastRow, "p2Cash"]) {
       data[[2*i-1]]$Outcome = "win"
       data[[2*i]]$Outcome = "loss"
-    }else{
+    }else if (data[[2*i-1]][.lastRow, "p1Cash"] < data[[2*i]][.lastRow, "p2Cash"]) {
       data[[2*i-1]]$Outcome = "loss"
       data[[2*i]]$Outcome = "win"
+    } else {
+      data[[2*i-1]]$Outcome = "draw"
+      data[[2*i]]$Outcome = "draw"
     }
     # 增加一欄該玩家的ID，也就是該檔名
     data[[2*i-1]]$ID <- sub(".csv", "", basename(fileNames[2*i-1]))
@@ -94,7 +97,7 @@
                        PriceChange = pcCategorize(data[[j]]$StockPrice),
                        Decision = factor(data[[j]][,7], levels = c("buy", "no trade", "sell")),
                        CheckHistory = factor(data[[j]][,8], levels = c("yes", "no")),
-                       Outcome = factor(data[[j]][,9], levels = c("win", "loss")), 
+                       Outcome = factor(data[[j]][,9], levels = c("win", "loss", "draw")), 
                        Player = j)
     dList[[j]] <- temp
     dDF <- rbind(dDF, dList[[j]])
