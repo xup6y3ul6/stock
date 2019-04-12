@@ -197,7 +197,8 @@ navbarPage(
       "股票變化(漲/持平/跌)與決策配對(買/不買不賣/賣)"
     ), 
     h3("依照各個股票變化情境下，對行為做百分比"),
-    tabsetPanel(
+    
+    tabsetPanel(selected = "MLE",
       tabPanel("K-means",
         sidebarPanel(
           sliderInput("dc_trialRange", "trial range",
@@ -242,7 +243,7 @@ navbarPage(
         )
       ),
       
-      tabPanel("MLE & LR test",
+      tabPanel("MLE & LR test", value = "MLE",
         sidebarPanel(
           h4("Condition"),
           selectInput("dc_condition", "Select: target",
@@ -282,7 +283,9 @@ navbarPage(
         ),
         mainPanel(
           plotlyOutput("dc_mlePlot"),
+          # plotlyOutpu("dc_mleEstPlot"),
           tableOutput("dc_mleParameter"),
+          verbatimTextOutput("dc_hessian"),
           tableOutput("dc_LRtest")
         )
       )

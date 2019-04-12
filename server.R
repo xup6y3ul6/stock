@@ -652,15 +652,26 @@ function(input, output, session){
                            choices = c("df=2 (p,q,r unknown)"))
              )})
     })
-    
     observe({
       .p <- as.numeric(input$dc_mleRes_p)
       .q <- as.numeric(input$dc_mleRes_q)
       .r <- 1-.p-.q
       updateTextInput(session, "dc_mleRes_r", value = as.character(.r))
     })
+    output$dc_mleRes_pqr <- renderUI({
+      switch (input$dc_mleResModel, 
+              "df=0 (p,q,r given)" = tagList(textInput("dc_mleRes_p", "p =", value = 1/3),
+                                             textInput("dc_mleRes_q", "q =", value = 1/3),
+                                             textInput("dc_mleRes_r", "r = 1-p-q (automatic)", value = 1/3)),
+              "df=1 (p given)" = textInput("dc_mleRes_1", "p =", value = "0.5"),
+              "df=1 (q given)" = textInput("dc_mleRes_1", "q =", value = "0.5"), 
+              "df=1 (r given)" = textInput("dc_mleRes_1", "r =", value = "0.5"),
+              "df=2 (p larger)"= textInput("dc_mleRes_2", "p >=", value = "0.55"),
+              "df=2 (q larger)"= textInput("dc_mleRes_2", "q >=", value = "0.55"),
+              "df=2 (r larger)"= textInput("dc_mleRes_2", "r >=", value = "0.55"))
+    })
     
-    # data
+    # select data
     dc_mleData <- reactive({
       .ct <- dc_clusterTable() %>% 
         as.data.frame() %>% 
@@ -685,6 +696,7 @@ function(input, output, session){
       return(.ct)  
     }) 
 
+    # plot
     output$dc_mlePlot <- renderPlotly({
       .data <- dc_clusterTable() %>% 
         filter(cluster %in% as.integer(c(input$dc_mleCluster, input$dc_mleCluster2))) %>% 
@@ -709,8 +721,29 @@ function(input, output, session){
         geom_histogram(stat = "identity", position = "dodge") + 
         facet_wrap(~ cluster) +
         theme_bw()
+      # input$dc_update
+      # isolate({
+      #   .h_r<- sqrt(diag(solve(dc_restrictModel()$hessian)))
+      #   .hessian_res <- switch(input$dc_mleResModel,
+      #                          "df=2 (p,q,r unknown)" = c(.h_r, 0),
+      #                          "df=1 (q = r unknown)" = c(.h_r, 0, 0),
+      #                          "df=0 (p,q,r given)" = c(0, 0, 0))
+      #   .hessian_gen <- sqrt(diag(solve(dc_generalModel()$hessian)))
+      #   .errBar <- .data %>%
+      #     mutate(ymin_res = ratio.total.mean - .hessian_res,
+      #            ymax_res = ratio.total.mean + .hessian_res)
+      #            # ymin_gen = ratio.total.mean - c(.hessian_gen, 0),
+      #            # ymax_gen = ratio.total.mean + c(.hessian_gen, 0))
+      #   g <- g +
+      #     geom_errorbar(data = .errBar, aes(ymin = ymin_res, ymax = ymax_res),
+      #                   position = position_dodge(0.9), width = 0.1, color = "gray") 
+      #     geom_errorbar(data = .errBar,  aes(ymin = ymin_gen, ymax = ymax_gen),
+      #                   position = position_dodge(0.9), width = 0.1, color = "black")
+      # })
       ggplotly(g)
     })
+    
+    
     
     # nll function
     nll_condition <- function(par, x, condition, par_giv = NULL) {
@@ -794,24 +827,11 @@ function(input, output, session){
                                        .parameter_general <- qlogis(c(0.1))}
       )
       
-      .result <- nlm(nll, .parameter_general, dc_mleData(), condition = .condition)
+      .result <- nlm(nll, .parameter_general, dc_mleData(), condition = .condition, hessian = TRUE)
       return(.result)
     })
     
     # restrict model
-    output$dc_mleRes_pqr <- renderUI({
-      switch (input$dc_mleResModel, 
-              "df=0 (p,q,r given)" = tagList(textInput("dc_mleRes_p", "p =", value = 1/3),
-                                             textInput("dc_mleRes_q", "q =", value = 1/3),
-                                             textInput("dc_mleRes_r", "r = 1-p-q (automatic)", value = 1/3)),
-              "df=1 (p given)" = textInput("dc_mleRes_1", "p =", value = "0.5"),
-              "df=1 (q given)" = textInput("dc_mleRes_1", "q =", value = "0.5"), 
-              "df=1 (r given)" = textInput("dc_mleRes_1", "r =", value = "0.5"),
-              "df=2 (p larger)"= textInput("dc_mleRes_2", "p >=", value = "0.55"),
-              "df=2 (q larger)"= textInput("dc_mleRes_2", "q >=", value = "0.55"),
-              "df=2 (r larger)"= textInput("dc_mleRes_2", "r >=", value = "0.55"))
-    })
-    
     dc_restrictModel <- eventReactive(input$dc_update, { 
       .parameter_given <- NULL
       switch(input$dc_mleResModel,
@@ -845,15 +865,22 @@ function(input, output, session){
                                 .parameter_given <- qlogis(as.numeric(c(input$dc_mleRes_p, input$dc_mleRes_q, input$dc_mleRes_r)))
                                 .parameter_restrict <- -99} #我們沒有要估計的參數，任意設的
       )
-      .result <- nlm(nll, .parameter_restrict, dc_mleData(), condition = .condition, parameters_giv = .parameter_given)
+      .result <- nlm(nll, .parameter_restrict, dc_mleData(), condition = .condition, parameters_giv = .parameter_given, hessian = TRUE)
       return(.result)
       
     }) 
     
+    # output result: MLE
     output$dc_mleParameter <- renderTable({
       input$dc_update
       isolate({
         .parName <- c("p_buy", "q_noTrade", "r_sell")
+        if (input$dc_mleResModel != "df=0 (p,q,r given)") {
+          .h_res <- sqrt(diag(solve(dc_restrictModel()$hessian)))
+          .h_gen <- sqrt(diag(solve(dc_generalModel()$hessian)))
+        }
+        .hessian_res <- NA
+        .hessian_gen <- NA
         
         .parEstimate_gen <- vector("numeric", length = 3)
         switch(input$dc_mleGenModel,
@@ -861,26 +888,32 @@ function(input, output, session){
                                                .pl_est <- round(plogis(dc_generalModel()$estimate), digits = 3)
                                                .parEstimate_gen[1] <- paste(.pl_est[seq(1, 2*.n, 2)], collapse = ", ")
                                                .parEstimate_gen[2] <- paste(.pl_est[seq(2, 2*.n, 2)], collapse = ", ")
-                                               .parEstimate_gen[3] <- paste(round(1-(.pl_est[seq(1, 2*.n, 2)]+.pl_est[seq(2, 2*.n, 2)]), digits = 3), collapse = ", ")},
+                                               .parEstimate_gen[3] <- paste(round(1-(.pl_est[seq(1, 2*.n, 2)]+.pl_est[seq(2, 2*.n, 2)]), digits = 3), collapse = ", ")
+                                               .hessian_gen <- c(.h_gen[1:2], 0, .h_gen[3:4], 0)},
                "df=2n (p_i,q_i,r_i unknown)" = {.n <- length(dc_generalModel()$estimate)/2
                                                 .pl_est <- round(plogis(dc_generalModel()$estimate), digits = 3)
                                                 .parEstimate_gen[1] <- paste(.pl_est[seq(1, 2*.n, 2)], collapse = ", ")
                                                 .parEstimate_gen[2] <- paste(.pl_est[seq(2, 2*.n, 2)], collapse = ", ")
                                                 .parEstimate_gen[3] <- paste(round(1-(.pl_est[seq(1, 2*.n, 2)]+.pl_est[seq(2, 2*.n, 2)]), digits = 3), collapse = ", ")},
                "df=2 (p,q,r unknown)" = {.parEstimate_gen <- plogis(dc_generalModel()$estimate)
-                                         .parEstimate_gen[3] <- 1 - sum(.parEstimate_gen)},
+                                         .parEstimate_gen[3] <- 1 - sum(.parEstimate_gen)
+                                         .hessian_gen <- c(.h_gen, 0)},
                "df=1 (p = q unknown)" = {.parEstimate_gen[c(1, 2)] <- plogis(dc_generalModel()$estimate)
-                                         .parEstimate_gen[3] <- 1 - sum(.parEstimate_gen)},
+                                         .parEstimate_gen[3] <- 1 - sum(.parEstimate_gen)
+                                         .hessian_gen <- c(0, 0, .h_gen)},
                "df=1 (p = r unknown)" = {.parEstimate_gen[c(1, 3)] <- plogis(dc_generalModel()$estimate)
-                                         .parEstimate_gen[2] <- 1 - sum(.parEstimate_gen)},
+                                         .parEstimate_gen[2] <- 1 - sum(.parEstimate_gen)
+                                         .hessian_gen <- c(0, .h_gen, 0)},
                "df=1 (q = r unknown)" = {.parEstimate_gen[c(2, 3)] <- plogis(dc_generalModel()$estimate)
-                                         .parEstimate_gen[1] <- 1 - sum(.parEstimate_gen)}
+                                         .parEstimate_gen[1] <- 1 - sum(.parEstimate_gen)
+                                         .hessian_gen <- c(.h_gen, 0, 0)}
         )
         
         .parEstimate_res <- vector("numeric", length = 3)
         switch(input$dc_mleResModel,
                "df=2 (p,q,r unknown)" = {.parEstimate_res <- plogis(dc_restrictModel()$estimate)
-                                         .parEstimate_res[3] <- 1 - sum(.parEstimate_res)},
+                                         .parEstimate_res[3] <- 1 - sum(.parEstimate_res)
+                                         .hessian_res <- c(.h_res, 0)},
                "df=2 (p larger)" = {.parEstimate_res[1] <- plogis(dc_restrictModel()$estimate)[1]*(1-as.numeric(input$dc_mleRes_2))+as.numeric(input$dc_mleRes_2)
                                     .parEstimate_res[2] <- plogis(dc_restrictModel()$estimate)[2]*(1-as.numeric(input$dc_mleRes_2))
                                     .parEstimate_res[3] <- 1-sum(.parEstimate_res)},
@@ -900,27 +933,38 @@ function(input, output, session){
                                    .parEstimate_res[1] <- plogis(dc_restrictModel()$estimate)*(1-.parEstimate_res[3])
                                    .parEstimate_res[2] <- 1 - sum(.parEstimate_res)},
                "df=1 (p = q unknown)" = {.parEstimate_res[c(1, 2)] <- plogis(dc_restrictModel()$estimate)
-                                         .parEstimate_res[3] <- 1 - sum(.parEstimate_res)},
+                                         .parEstimate_res[3] <- 1 - sum(.parEstimate_res)
+                                         .hessian_res <- c(0, 0, .h_res)},
                "df=1 (p = r unknown)" = {.parEstimate_res[c(1, 3)] <- plogis(dc_restrictModel()$estimate)
-                                         .parEstimate_res[2] <- 1 - sum(.parEstimate_res)},
+                                         .parEstimate_res[2] <- 1 - sum(.parEstimate_res)
+                                         .hessian_res <- c(0, .h_res, 0)},
                "df=1 (q = r unknown)" = {.parEstimate_res[c(2, 3)] <- plogis(dc_restrictModel()$estimate)
-                                         .parEstimate_res[1] <- 1 - sum(.parEstimate_res)},
+                                         .parEstimate_res[1] <- 1 - sum(.parEstimate_res)
+                                         .hessian_res <- c(.h_res, 0, 0)},
                "df=0 (p,q,r given)" = {.parEstimate_res <- as.numeric(c(input$dc_mleRes_p, input$dc_mleRes_q, input$dc_mleRes_r))})
         
         data.frame(parameter_name = .parName, 
-                   restric_model = .parEstimate_res, 
-                   general_model = .parEstimate_gen)
+                   restrict_model = .parEstimate_res, 
+                   restrict_hessian = .hessian_res,
+                   general_model = .parEstimate_gen,
+                   general_hessian = .hessian_gen)
       })
     })
     
+    # MLE prarmeter estimate plot
+    # output$dc_mleEstPlot <- renderPlotly({
+    #   
+    # })
+    
+    # output result: LR test
     output$dc_LRtest <- renderTable({
       nll_general <- dc_generalModel()$minimum
       df_general <- length(dc_generalModel()$estimate)
-      aic_general <- 2*df_general+2*nll_general
+      aic_general <- 2*df_general + 2*nll_general
       
       nll_restrict <- dc_restrictModel()$minimum
       df_restrict <- ifelse(sum(dc_restrictModel()$estimate == -99), 0L, length(dc_restrictModel()$estimate))
-      aic_restrict <- 2*df_restrict+2*nll_restrict
+      aic_restrict <- 2*df_restrict + 2*nll_restrict
       
       G2 <- 2 * (nll_restrict - nll_general)
       chisqCriteria <- qchisq(0.95, df = df_general - df_restrict)
