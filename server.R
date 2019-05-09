@@ -493,8 +493,6 @@ function(input, output, session){
       return(.dMat2)
     })
     
-    
-    
     output$dc_overAllPlot <- renderPlot({
       data <- data.frame(PriceChange = sapply(strsplit(colnames(dc_data()), "-"), "[", 1),
                          Decision = sapply(strsplit(colnames(dc_data()), "-"), "[", 2),
@@ -525,6 +523,17 @@ function(input, output, session){
   }
   # dc_clsters
   {
+    observeEvent(input$dc_trialRange, {
+      print("HI")
+      trialRange <- input$dc_trialRange
+      isolate(updateSliderInput(session, "dc_mleTrialRange", value = trialRange))
+    })
+    observeEvent(input$dc_mleTrialRange, {
+      print("YO")
+      trialRange <- input$dc_mleTrialRange
+      isolate(updateSliderInput(session, "dc_trialRange", value = trialRange))
+    })
+    
     observe({
       maxCluster <- as.integer(input$dc_k)
       updateSelectInput(session, "dc_selectCluster", choices = 1:maxCluster)
@@ -589,10 +598,10 @@ function(input, output, session){
       ggplotly(g)
     })
     
-    output$dc_summarise <- renderTable(
+    output$dc_summarise <- renderTable({
       dc_selectTable() %>% 
         select(priceChange, action, n, ratio.total.mean, ratio.total.sd)
-    )
+    })
     
   }
   # dc_MLE & LR test
@@ -601,6 +610,8 @@ function(input, output, session){
     output$dc_uiCondition <- renderUI({
       switch(input$dc_condition,
              "intra-condition" = {tagList(
+               sliderInput("dc_mleTrialRange", "Select: trial range 1",
+                           min = 1, max = 100, value = c(1, 100)),
                selectInput("dc_mleCluster", "Select: cluster", 
                            choices = 1:4, selected = 1),
                selectInput("dc_mleDPCondi", "Select: delta Price condition",
@@ -628,14 +639,17 @@ function(input, output, session){
                                        "df=1 (q given)",
                                        "df=1 (r given)",
                                        "df=0 (p,q,r given)"))
-               
              )},
              
              "inter-condition" = {tagList(
+               sliderInput("dc_mleTrialRange", "Select: trial range 1",
+                           min = 1, max = 100, value = c(1, 100)),
                selectInput("dc_mleCluster", "Select: cluster 1", 
                            choices = 1:4, selected = 1),
                selectInput("dc_mleDPCondi", "Select: delta Price condition 1",
                            choices = c("FALL", "RISE", "STALL")),
+               sliderInput("dc_mleTrialRange2", "Select: trial range 2",
+                           min = 1, max = 100, value = c(1, 100)),
                selectInput("dc_mleCluster2", "Select: cluster 2", 
                            choices = 1:4, selected = 2),
                selectInput("dc_mleDPCondi2", "Select: delta Price condition 2",
@@ -652,6 +666,7 @@ function(input, output, session){
                            choices = c("df=2 (p,q,r unknown)"))
              )})
     })
+  
     observe({
       .p <- as.numeric(input$dc_mleRes_p)
       .q <- as.numeric(input$dc_mleRes_q)
@@ -671,6 +686,46 @@ function(input, output, session){
               "df=2 (r larger)"= textInput("dc_mleRes_2", "r >=", value = "0.55"))
     })
     
+    # new second cluster data (for inter-condition)
+    dc_clusterTable2 <- reactive({
+      . <- dDF %>% 
+        filter(Trials >= input$dc_mleTrialRange2[1], Trials <= input$dc_mleTrialRange2[2])
+      .table <- table(.$Player, .$Decision, .$PriceChange)
+      .nPlayer <- dim(.table)[1] #table(.$Player,,)
+      .dMat <- matrix(.table, nrow = .nPlayer)
+      .fallSum <- rowSums(.dMat[, 1:3])
+      .riseSum <- rowSums(.dMat[, 4:6])
+      .stallSum <- rowSums(.dMat[, 7:9])
+      .dMat2 <- cbind(
+        .dMat[, 1:3] / .fallSum, 
+        .dMat[, 4:6] / .riseSum, 
+        .dMat[, 7:9] / .stallSum
+      ) 
+      colnames(.dMat2) <- c("FALL-buy","FALL-no trade","FALL-sell",
+                            "RISE-buy","RISE-no trade","RISE-sell",
+                            "STALL-buy","STALL-no trade","STALL-sell")
+      rownames(.dMat2) <- 1:.nPlayer
+      
+      if (as.logical(input$dc_na.rm) == TRUE) {
+        if (sum(is.na(.dMat2)) > 0) {
+          rmRow <- unique(which(is.na(.dMat2)) %% .nPlayer)
+          .dMat2 <- .dMat2[-rmRow, ]
+        } 
+      }
+      
+      set.seed(408516)
+      if (input$dc_clusterMethod == "kmeans") {
+        .kmeans <- kmeans(.dMat2, input$dc_k, iter.max = 20, nstart = 30)
+      } else {
+        .kmeans <- hkmeans(.dMat2, input$dc_k)
+      }
+      
+      .clusterTable <- as.data.frame(round(.dMat2, 3))
+      .clusterTable$player <- rownames(.clusterTable)
+      .clusterTable$cluster <- .kmeans$cluster
+      return(.clusterTable)
+    })
+    
     # select data
     dc_mleData <- reactive({
       .ct <- dc_clusterTable() %>% 
@@ -681,7 +736,7 @@ function(input, output, session){
           "RISE" = 4:6,   # "RISE-buy":"RISE-sell"
           "STALL"= 7:9))  # "STAll-buy":"STALL-sell"
       if (input$dc_condition == "inter-condition") {
-        .ct2 <- dc_clusterTable() %>% 
+        .ct2 <- dc_clusterTable2() %>% 
           as.data.frame() %>% 
           filter(cluster == as.integer(input$dc_mleCluster2)) %>% 
           select(switch(input$dc_mleDPCondi2,
@@ -699,7 +754,7 @@ function(input, output, session){
     # plot
     output$dc_mlePlot <- renderPlotly({
       .data <- dc_clusterTable() %>% 
-        filter(cluster %in% as.integer(c(input$dc_mleCluster, input$dc_mleCluster2))) %>% 
+        filter(cluster == as.integer(input$dc_mleCluster)) %>% 
         gather(key = "dimansions", value = "ratio", -cluster, -player) %>% 
         select(-player) %>% 
         group_by(cluster, dimansions) %>% 
@@ -707,43 +762,39 @@ function(input, output, session){
                   ratio.total.mean = mean(ratio), 
                   ratio.total.sd = sd(ratio)) %>% 
         mutate(priceChange = sapply(strsplit(dimansions, "-"), "[", 1), 
-               action = sapply(strsplit(dimansions, "-"), "[", 2)) 
+               action = sapply(strsplit(dimansions, "-"), "[", 2),
+               group = "group1") %>% 
+        filter(priceChange == input$dc_mleDPCondi)
       
-      if (input$dc_condition == "intra-condition") {
-        .data <- .data %>% filter(priceChange == input$dc_mleDPCondi)
-      } else {
-        .data <- .data %>% 
-          filter((priceChange == input$dc_mleDPCondi & cluster == as.integer(input$dc_mleCluster)) | 
-                 (priceChange == input$dc_mleDPCondi2 & cluster == as.integer(input$dc_mleCluster2)))
+      if (input$dc_condition == "inter-condition") {
+        .data2 <- dc_clusterTable2() %>% 
+          filter(cluster == as.integer(input$dc_mleCluster2)) %>% 
+          gather(key = "dimansions", value = "ratio", -cluster, -player) %>% 
+          select(-player) %>% 
+          group_by(cluster, dimansions) %>% 
+          summarise(n = length(ratio), 
+                    ratio.total.mean = mean(ratio), 
+                    ratio.total.sd = sd(ratio)) %>% 
+          mutate(priceChange = sapply(strsplit(dimansions, "-"), "[", 1), 
+                 action = sapply(strsplit(dimansions, "-"), "[", 2),
+                 group = "group2") %>% 
+          filter(priceChange == input$dc_mleDPCondi2)
+        
+        .data <- rbind(.data, .data2)
+      #   .data <- .data %>% filter(priceChange == input$dc_mleDPCondi)
+      # } else {
+      #   .data <- .data %>% 
+      #     filter((priceChange == input$dc_mleDPCondi & cluster == as.integer(input$dc_mleCluster)) | 
+      #            (priceChange == input$dc_mleDPCondi2 & cluster == as.integer(input$dc_mleCluster2)))
       }
       
       g <- ggplot(.data, aes(x = priceChange, y = ratio.total.mean, fill = action)) +
         geom_histogram(stat = "identity", position = "dodge") + 
-        facet_wrap(~ cluster) +
+        facet_wrap(~ group) +
         theme_bw()
-      # input$dc_update
-      # isolate({
-      #   .h_r<- sqrt(diag(solve(dc_restrictModel()$hessian)))
-      #   .hessian_res <- switch(input$dc_mleResModel,
-      #                          "df=2 (p,q,r unknown)" = c(.h_r, 0),
-      #                          "df=1 (q = r unknown)" = c(.h_r, 0, 0),
-      #                          "df=0 (p,q,r given)" = c(0, 0, 0))
-      #   .hessian_gen <- sqrt(diag(solve(dc_generalModel()$hessian)))
-      #   .errBar <- .data %>%
-      #     mutate(ymin_res = ratio.total.mean - .hessian_res,
-      #            ymax_res = ratio.total.mean + .hessian_res)
-      #            # ymin_gen = ratio.total.mean - c(.hessian_gen, 0),
-      #            # ymax_gen = ratio.total.mean + c(.hessian_gen, 0))
-      #   g <- g +
-      #     geom_errorbar(data = .errBar, aes(ymin = ymin_res, ymax = ymax_res),
-      #                   position = position_dodge(0.9), width = 0.1, color = "gray") 
-      #     geom_errorbar(data = .errBar,  aes(ymin = ymin_gen, ymax = ymax_gen),
-      #                   position = position_dodge(0.9), width = 0.1, color = "black")
-      # })
+      
       ggplotly(g)
     })
-    
-    
     
     # nll function
     nll_condition <- function(par, x, condition, par_giv = NULL) {
@@ -871,14 +922,12 @@ function(input, output, session){
     }) 
     
     # output result: MLE
-    output$dc_mleParameter <- renderTable({
+    dc_mleParameter <- reactive({
       input$dc_update
       isolate({
         .parName <- c("p_buy", "q_noTrade", "r_sell")
-        if (input$dc_mleResModel != "df=0 (p,q,r given)") {
-          .h_res <- sqrt(diag(solve(dc_restrictModel()$hessian)))
-          .h_gen <- sqrt(diag(solve(dc_generalModel()$hessian)))
-        }
+        if (input$dc_mleResModel != "df=0 (p,q,r given)") {.h_res <- sqrt(diag(solve(dc_restrictModel()$hessian)))}
+        .h_gen <- sqrt(diag(solve(dc_generalModel()$hessian)))
         .hessian_res <- NA
         .hessian_gen <- NA
         
@@ -950,11 +999,27 @@ function(input, output, session){
                    general_hessian = .hessian_gen)
       })
     })
-    
-    # MLE prarmeter estimate plot
-    # output$dc_mleEstPlot <- renderPlotly({
-    #   
-    # })
+    output$dc_mleParameterTable <- renderTable({
+      return(dc_mleParameter())
+    })
+    output$dc_mleParameterPlot <- renderPlotly({
+      .est_res <- dc_mleParameter() %>% select(parameter_name, restrict_model, restrict_hessian)
+      names(.est_res) <- c("parameter_name", "estimate", "hessian")
+      .est_gen <- dc_mleParameter() %>% select(parameter_name, general_model, general_hessian)
+      names(.est_gen) <- c("parameter_name", "estimate", "hessian")
+      .est <- rbind(.est_res, .est_gen) %>% 
+        mutate(ymin = estimate - hessian, ymax = estimate + hessian, 
+               model = c(rep("restrict", 3), rep("general", 3)))
+      
+      print(.est)
+      g <- ggplot(.est, aes(x = parameter_name, y = estimate, fill = model)) +
+        geom_histogram(stat = "identity", position = "dodge") +
+        geom_errorbar(aes(ymin = ymin, ymax = ymax),
+                      position = position_dodge(0.9), width = 0.1) +
+        theme_bw()
+      
+      ggplotly(g)
+    })
     
     # output result: LR test
     output$dc_LRtest <- renderTable({
@@ -976,7 +1041,7 @@ function(input, output, session){
       }
       
       data.frame(df_restrict, nll_restrict, aic_restrict,
-                 df_general, nll_general, aic_restrict, 
+                 df_general, nll_general, aic_general, 
                  G2, chisqCriteria, pvalue, significance)
 
     })
