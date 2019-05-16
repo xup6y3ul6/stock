@@ -2,7 +2,7 @@ library(shiny)
 source("data.R")
 
 navbarPage(
-  title = "EBG behavior data", selected = "dc",
+  title = "EBG behavior data", selected = "dAsA",
   # "all data table"
   {tabPanel("All data table",
     titlePanel(
@@ -105,27 +105,71 @@ navbarPage(
   # [dAsA](delta asset & action)
   # "deltaAsset((i-j),t)-Action(i,t): K-means"
   {
-    tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta Asset_{i-j}^t\\)")),
-      headerPanel(
-        "當期雙方的總資產差異與自己的決策，做K-means clustering"
-      ),
+    
+    tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta Asset_{i-j}^t\\)")), value = "dAsA",
       
-      sidebarPanel(
-        numericInput("dAsA_k", "Number of Clusters", 6,
-                     min = 1, max = 9),
-        selectInput("dAsA_selectCluster", "Select: cluster",
-                    choices = 1:6, selected = 1),
-        sliderInput("dAsA_ylim", "Select: y axis range", 
-                    min = 0, max = 1, value = c(0, 0.5), step = 0.05)
-      ),
-      
-      mainPanel(
-        plotOutput("dAsA_clusterPlot"),
-        plotOutput("dAsA_tTestPlot"),
-        plotOutput("dAsA_fvizPlot"),
-        plotOutput("dAsA_elbowPlot"),
-        plotOutput("dAsA_dendPlot")
+      tabsetPanel(
+        tabPanel("kmeans",
+           headerPanel(
+             "當期雙方的總資產差異與自己的決策，做K-means clustering"
+           ),
+           
+           sidebarPanel(
+             #numericInput("dAsA_k", "Number of Clusters", 6,
+             #             min = 1, max = 9),
+             #selectInput("dAsA_selectCluster", "Select: cluster",
+             #            choices = 1:6, selected = 1),
+             #sliderInput("dAsA_ylim", "Select: y axis range", 
+             #            min = 0, max = 1, value = c(0, 0.5), step = 0.05)
+             sliderInput("dAsA_trialRange", "trial range",
+                         min = 1, max = 100, value = c(1, 100)),
+             selectInput("dAsA_na.rm", "NA remove?", 
+                         choices = c("FALSE", "TRUE"), selected = "FALSE"),
+             selectInput("dAsA_conin.rm", "Conincident condition remove?",
+                         choices = c("FALSE", "TRUE"), selected = "FALSE")
+           ),
+           
+           mainPanel(
+             plotOutput("dAsA_overAllPlot"),
+             #plotOutput("dAsA_clusterPlot"),
+             #plotOutput("dAsA_tTestPlot"),
+             plotOutput("dAsA_fvizPlot"),
+             plotOutput("dAsA_elbowPlot"),
+             plotOutput("dAsA_dendPlot")
+           )
+        ),
+        
+        tabPanel("by Cluster",
+          sidebarPanel(
+            numericInput('dAsA_k', 'Number of Clusters', 4,
+                         min = 1, max = 12),
+            selectInput("dAsA_selectCluster", "Select: cluster",
+                        choices = 1:4, selected = 1),
+            selectInput("dAsA_clusterMethod", "Select: cluster method",
+                        choices = c("hkmeans", "kmeans")),
+            selectInput("dAsA_errorBar", "Select: error bar",
+                        choices = c("se", "sd")),
+            sliderInput("dAsA_ylim", "Select: y axis range",
+                        min = 0, max = 1, value = c(0, 0.8), step = 0.05)
+
+           ),
+           mainPanel(
+             plotOutput("dAsA_clusterPlot"),
+             tableOutput("dAsA_summarise"),
+             DT::dataTableOutput("dAsA_clustersTable")
+           )
+        )
+        # 
+        # tabPanel("MLE & LR test",
+        #   sidebarPanel(),
+        #   
+        #   mainPanel()
+        # 
+        # )
+        
       )
+             
+      
     )
   },
   
@@ -203,14 +247,6 @@ navbarPage(
         sidebarPanel(
           sliderInput("dc_trialRange", "trial range",
                       min = 1, max = 100, value = c(1, 100)),
-          # checkboxGroupInput("dc_OC", "Select: win or loss player",
-          #                    choices = levels(dDF$Outcome), selected = levels(dDF$Outcome)),
-          # checkboxGroupInput("dc_CH", "Select: if player checked history in trials",
-          #                    choices = levels(dDF$CheckHistory), selected = levels(dDF$CheckHistory)),
-          # checkboxGroupInput("dc_no.player", "Select: the players",
-          #                    choices = unique(dDF$Player),
-          #                    selected = unique(dDF$Player), 
-          #                    inline = TRUE)
           selectInput("dc_na.rm", "NA remove?", 
                       choices = c("FALSE", "TRUE"), selected = "FALSE")
         ),

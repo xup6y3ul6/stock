@@ -116,35 +116,35 @@
 # deltaAsset-Action
 # deltaAseet是自己剪去對手的Asset
 {
-  .list <- list()
-  for(i in 1:length(data)){
-    if((i %% 2) == 1){
-      .df <- data.frame(deltaTA = data[[i]]$p1TotalAsset[1:100] - data[[i+1]]$p2TotalAsset[1:100],
-                        decision = factor(data[[i]]$p1Decision[1:100], levels = c("buy", "no trade", "sell")))
-    }else{
-      .df <- data.frame(deltaTA = data[[i]]$p2TotalAsset[1:100] - data[[i-1]]$p1TotalAsset[1:100],
-                        decision = factor(data[[i]]$p2Decision[1:100], levels = c("buy", "no trade", "sell")))
-    }
-    
-    .x <- vector(mode = "character", length = nrow(.df))
-    for (j in 1:nrow(.df)) {
-      if (.df$deltaTA[j] > 0) {
-        .x[j] <- "LEADING"
-      }else if (.df$deltaTA[j] < 0) {
-        .x[j] <- "LAGGING"
-      }else {
-        .x[j] <- "COINCIDENT"
-      }
-    }
-    
-    .df$dtaCategorise <- factor(.x, levels = c("LEADING", "COINCIDENT", "LAGGING"))
-    
-    . <- table(.df[c("dtaCategorise", "decision")]) / 100
-    .list[[i]] <- matrix(t(.), nrow = 1, byrow = FALSE)
-  }
-  dAsA_data <- as.data.frame(do.call("rbind", .list))
-  names(dAsA_data) <- c("LEADING-buy", "LEADING-no trade", "LEADING-sell",
-                        "COINCIDENT-buy", "COINCIDENT-no trade", "COINCIDENT-sell",
-                        "LAGGING-buy", "LAGGING-no trade", "LAGGING-sell")
+  # .list <- list()
+  # for(i in 1:length(data)){
+  #   if((i %% 2) == 1){
+  #     .df <- data.frame(deltaTA = data[[i]]$p1TotalAsset[1:100] - data[[i+1]]$p2TotalAsset[1:100],
+  #                       decision = factor(data[[i]]$p1Decision[1:100], levels = c("buy", "no trade", "sell")))
+  #   }else{
+  #     .df <- data.frame(deltaTA = data[[i]]$p2TotalAsset[1:100] - data[[i-1]]$p1TotalAsset[1:100],
+  #                       decision = factor(data[[i]]$p2Decision[1:100], levels = c("buy", "no trade", "sell")))
+  #   }
+  # 
+  #   .x <- vector(mode = "character", length = nrow(.df))
+  #   for (j in 1:nrow(.df)) {
+  #     if (.df$deltaTA[j] > 0) {
+  #       .x[j] <- "LEADING"
+  #     }else if (.df$deltaTA[j] < 0) {
+  #       .x[j] <- "LAGGING"
+  #     }else {
+  #       .x[j] <- "COINCIDENT"
+  #     }
+  #   }
+  # 
+  #   .df$dtaCategorise <- factor(.x, levels = c("LEADING", "COINCIDENT", "LAGGING"))
+  # 
+  #   . <- table(.df[c("dtaCategorise", "decision")]) / 100
+  #   .list[[i]] <- matrix(t(.), nrow = 1, byrow = FALSE)
+  # }
+  # dAsA_data <- as.data.frame(do.call("rbind", .list))
+  # names(dAsA_data) <- c("LEADING-buy", "LEADING-no trade", "LEADING-sell",
+  #                       "COINCIDENT-buy", "COINCIDENT-no trade", "COINCIDENT-sell",
+  #                       "LAGGING-buy", "LAGGING-no trade", "LAGGING-sell")
 }
 

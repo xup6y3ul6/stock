@@ -23,6 +23,7 @@ function(input, output, session){
     )
   }
 
+  
   # "stock plot"
   {
     spData<- reactive({
@@ -80,6 +81,7 @@ function(input, output, session){
     })      
   }
   
+  
   # "Action(p1,t) vs. Action(p2,t): Kmeans"
   {
     selectedDF <- reactive({
@@ -135,6 +137,7 @@ function(input, output, session){
     })
   }
   
+  
   # page: 昊閎的K-mean
   {
     dcSelectDF <- reactive({
@@ -184,7 +187,8 @@ function(input, output, session){
     })
   }
 
-  # dAsA
+  
+  # dAsA_kmeans
   {
     # 更新可選擇cluster的總數量
     observe({
@@ -193,53 +197,108 @@ function(input, output, session){
     })
     
     # 轉換原始資料
-    dAsA_clusters <- reactive({
-      kmeans(dAsA_data, input$dAsA_k, nstart = 10, iter.max = 20)
+    
+    dAsA_data <- reactive({
+      .list <- list()
+      for(i in 1:length(data)){
+        if((i %% 2) == 1){
+          .df <- data.frame(deltaTA = data[[i]]$p1TotalAsset[input$dAsA_trialRange[1]:input$dAsA_trialRange[2]] - 
+                              data[[i+1]]$p2TotalAsset[input$dAsA_trialRange[1]:input$dAsA_trialRange[2]],
+                            decision = factor(data[[i]]$p1Decision[input$dAsA_trialRange[1]:input$dAsA_trialRange[2]], 
+                                              levels = c("buy", "no trade", "sell")))
+        }else{
+          .df <- data.frame(deltaTA = data[[i]]$p2TotalAsset[input$dAsA_trialRange[1]:input$dAsA_trialRange[2]] - 
+                              data[[i-1]]$p1TotalAsset[input$dAsA_trialRange[1]:input$dAsA_trialRange[2]],
+                            decision = factor(data[[i]]$p2Decision[input$dAsA_trialRange[1]:input$dAsA_trialRange[2]], 
+                                              levels = c("buy", "no trade", "sell")))
+        }
+        
+        .x <- vector(mode = "character", length = nrow(.df))
+        for (j in 1:nrow(.df)) {
+          if (.df$deltaTA[j] > 0) {
+            .x[j] <- "LEADING"
+          }else if (.df$deltaTA[j] < 0) {
+            .x[j] <- "LAGGING"
+          }else {
+            .x[j] <- "COINCIDENT"
+          }
+        }
+        
+        .df$dtaCategorise <- factor(.x, levels = c("LEADING", "COINCIDENT", "LAGGING"))
+        
+        . <- table(.df[c("dtaCategorise", "decision")])
+        #m <- ./100 # 100 trials
+        ###
+        .leadingSum <- rowSums(.)[1]
+        .coincidentSum <- rowSums(.)[2]
+        .laggingSum <- rowSums(.)[3]
+        .m <- rbind(
+          leading = .[1,]/.leadingSum,
+          coincident = .[2,]/.coincidentSum,
+          lagging = .[3,]/.laggingSum
+        )
+        ###
+        .list[[i]] <- matrix(t(.m), nrow = 1, byrow = FALSE)
+      }
+      dAsA_data <- as.data.frame(do.call("rbind", .list))
+      names(dAsA_data) <- c("LEADING-buy", "LEADING-no trade", "LEADING-sell",
+                            "COINCIDENT-buy", "COINCIDENT-no trade", "COINCIDENT-sell",
+                            "LAGGING-buy", "LAGGING-no trade", "LAGGING-sell")
+      rownames(dAsA_data) <- 1:160
+      ###
+      if (as.logical(input$dAsA_na.rm) == TRUE) {
+        if (sum(is.na(dAsA_data)) > 0) {
+          rmRow <- unique(which(is.na(dAsA_data)) %% 160)
+          dAsA_data <- dAsA_data[-rmRow, ]
+        } 
+      }
+      ###
+      ###
+      if (as.logical(input$dAsA_conin.rm) == TRUE) {
+        dAsA_data <- dAsA_data[,c(-4:-6)] 
+      }
+      ###
+      return(dAsA_data)
     })
     
-    dAsA_selectData <- reactive({
-      dAsA_data %>% 
-        mutate(cluster = dAsA_clusters()$cluster) %>% 
-        filter(cluster == as.integer(input$dAsA_selectCluster)) %>% 
-        select(-cluster) %>% 
-        gather(key = "dimansions", value = "total.ratio") %>%
-        mutate(deltaAsset = sapply(strsplit(dimansions, "-"), "[", 1), 
-               action = sapply(strsplit(dimansions, "-"), "[", 2))
+    dAsA_clusters <- reactive({
+      kmeans(dAsA_data(), input$dAsA_k, nstart = 10, iter.max = 20)
     })
     
     # plot
-    output$dAsA_clusterPlot <- renderPlot({
-      g <- dAsA_selectData() %>% 
+    output$dAsA_overAllPlot <- renderPlot({
+      g <- dAsA_data() %>% 
+        gather(key = "dimansions", value = "ratio.total") %>%
+        mutate(deltaAsset = sapply(strsplit(dimansions, "-"), "[", 1), 
+               action = sapply(strsplit(dimansions, "-"), "[", 2)) %>% 
         group_by(dimansions, deltaAsset, action) %>% 
-        summarise(n = length(total.ratio), 
-                  total.ratio.mean = mean(total.ratio), 
-                  total.ratio.sd = sd(total.ratio)) %>% 
-        ggplot(aes(x = deltaAsset, y = total.ratio.mean, fill = action)) +
+        summarise(n = length(ratio.total), 
+                  ratio.total.mean = mean(ratio.total)) %>% 
+        ggplot(aes(x = deltaAsset, y = ratio.total.mean, fill = action)) +
         geom_bar(stat = "identity", position = "dodge") + 
-        geom_errorbar(aes(ymin = ifelse((total.ratio.mean - total.ratio.sd) > 0, total.ratio.mean - total.ratio.sd, 0),
-                          ymax = total.ratio.mean + total.ratio.sd),
-                      position = position_dodge(0.9), width = 0.1) +
-        coord_cartesian(ylim = c(input$dAsA_ylim[1], input$dAsA_ylim[2])) +
+        coord_cartesian(ylim = c(0, 0.5)) +
         theme_bw()
       g
     })
     
-    output$dAsA_tTestPlot <- renderPlot({
-      g <- dAsA_selectData() %>% 
-        ggplot(aes(x = action, y = total.ratio, color = action)) +
-        geom_boxplot() + 
-        geom_jitter(position = position_jitter(0.2), alpha = I(0.25)) +
-        facet_grid(. ~ deltaAsset) +
-        theme_bw()
-      g + stat_compare_means(method = "t.test", paired = TRUE, 
-                             comparisons = list(c("buy", "no trade"), c("no trade", "sell"), c("buy", "sell")),
-                             label = "p.signif",
-                             label.y = c(0.6, 0.65, 0.7))
-    })
+    # plot
     
+    # output$dAsA_tTestPlot <- renderPlot({
+    #   g <- dAsA_selectData() %>% 
+    #     ggplot(aes(x = action, y = ratio.total, color = action)) +
+    #     geom_boxplot() + 
+    #     geom_jitter(position = position_jitter(0.2), alpha = I(0.25)) +
+    #     facet_grid(. ~ deltaAsset) +
+    #     theme_bw()
+    #   g + stat_compare_means(method = "t.test", paired = TRUE, 
+    #                          comparisons = list(c("buy", "no trade"), c("no trade", "sell"), c("buy", "sell")),
+    #                          label = "p.signif",
+    #                          label.y = c(0.6, 0.65, 0.7))
+    # })
+    # 
     output$dAsA_fvizPlot <- renderPlot({
       g <- fviz_cluster(dAsA_clusters(),          # 分群結果
-                        data = dAsA_data,         # 資料
+                        data = dAsA_data(),         # 資料
                         geom = c("point","text"), # 點和標籤(point & label)
                         frame.type = "norm") +    # 框架型態
         theme_bw()
@@ -247,7 +306,7 @@ function(input, output, session){
     })
     
     output$dAsA_elbowPlot <- renderPlot({
-      g <- fviz_nbclust(dAsA_data, 
+      g <- fviz_nbclust(dAsA_data(), 
                         FUNcluster = kmeans,# K-Means
                         method = "wss",     # total within sum of square
                         k.max = 12) +       # max number of clusters to consider
@@ -257,10 +316,83 @@ function(input, output, session){
     })
     
     output$dAsA_dendPlot <- renderPlot({
-      g <- fviz_dend(hkmeans(dAsA_data, input$dAsA_k), cex = 0.6)
+      g <- fviz_dend(hkmeans(dAsA_data(), input$dAsA_k), cex = 0.6)
       g
     })
   }
+  # dAsA_cluster
+  {
+    dAsA_Kmeans <- reactive({
+      set.seed(408516)
+      if (input$dAsA_clusterMethod == "kmeans") {
+        . <- kmeans(dAsA_data(), input$dAsA_k, iter.max = 20, nstart = 30)
+      } else {
+        . <- hkmeans(dAsA_data(), input$dAsA_k)
+      }
+      return(.)
+    })
+    
+    observe({
+      maxCluster <- as.integer(input$dAsA_k)
+      updateSelectInput(session, "dAsA_selectCluster", choices = 1:maxCluster)
+    })
+    
+    dAsA_selectData <- reactive({
+      dAsA_data() %>% 
+        mutate(cluster = dAsA_Kmeans()$cluster) %>% 
+        filter(cluster == as.integer(input$dAsA_selectCluster)) %>% 
+        select(-cluster) %>% 
+        gather(key = "dimansions", value = "ratio.total") %>%
+        mutate(deltaAsset = sapply(strsplit(dimansions, "-"), "[", 1), 
+               action = sapply(strsplit(dimansions, "-"), "[", 2)) %>% 
+        group_by(dimansions, deltaAsset, action) %>%
+        summarise(n = length(ratio.total),
+                  ratio.total.mean = mean(ratio.total),
+                  ratio.total.sd = sd(ratio.total),
+                  ratio.total.se = sd(ratio.total)/sqrt(length(ratio.total)))
+    })
+    
+    output$dAsA_clusterPlot <- renderPlot({
+      .err <- switch(input$dc_errorBar,
+                     "sd" = parse(text = "ratio.total.sd"),
+                     "se" = parse(text = "ratio.total.se"))
+      
+      g <- dAsA_selectData() %>%
+        ggplot(aes(x = deltaAsset, y = ratio.total.mean, fill = action)) +
+        geom_bar(stat = "identity", position = "dodge") +
+        geom_errorbar(aes(ymin = ifelse((ratio.total.mean - eval(.err)) > 0, ratio.total.mean - eval(.err), 0),
+                          ymax = ratio.total.mean + eval(.err)),
+                      position = position_dodge(0.9), width = 0.1) +
+        coord_cartesian(ylim = c(input$dAsA_ylim[1], input$dAsA_ylim[2])) +
+        theme_bw()
+      g
+    })
+    
+    output$dAsA_summarise <- renderTable({
+      dAsA_selectData() 
+    })
+    
+    dAsA_clusterTable <- reactive({
+      .clusterTable <- as.data.frame(round(dAsA_data(), 3))
+      .clusterTable$plyaer <- rownames(.clusterTable)
+      .clusterTable$cluster <- dAsA_Kmeans()$cluster
+      return(.clusterTable)
+    })
+    
+    output$dAsA_clustersTable <- DT::renderDataTable(
+      DT::datatable(
+        {dAsA_clusterTable() %>% 
+            filter(cluster == as.integer(input$dAsA_selectCluster)) %>% 
+            select(cluster, player, 1:9)
+        },
+        options = list(paging = FALSE)
+      )
+    )
+    
+  }
+  # dAsA_MLE & LR test
+  {}
+  
   
   # page: "decision"
   {
@@ -327,7 +459,7 @@ function(input, output, session){
     
     dClusterTable <- reactive({
       dClusterTable <- as.data.frame(dMat())
-      dClusterTable$player <- c(1:160)
+      #dClusterTable$player <- c(1:160)
       dClusterTable$cluster <- .dKmeans()$cluster
       dClusterTable %>% select(cluster, player, 1:9)
     })
@@ -521,7 +653,7 @@ function(input, output, session){
     })
     
   }
-  # dc_clsters
+  # dc_clusters
   {
     observeEvent(input$dc_trialRange, {
       print("HI")
