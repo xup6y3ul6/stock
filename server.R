@@ -81,7 +81,127 @@ function(input, output, session){
     })      
   }
   
-  
+  # ind: independent plot and test
+  {
+    ind_data <- reactive({
+      data <- pairData[[as.numeric(input$ind_pairNumber)]]
+      if(input$ind_iCategory == "2 classes (A_i/~A_i)"){
+        .iLabels <- switch(input$ind_iDecision, 
+                           "Buy" = c("B", "~B", "~B"),
+                           "No trade" = c("~N", "N", "~N"),
+                           "Sell" = c("~S", "~S", "S")
+        )
+      }else{
+        .iLabels = c("B", "N", "S")
+      }
+      
+      if(input$ind_iCategory == "2 classes (A_j/~A_j)"){
+        .jLabels <- switch(input$ind_jDecision, 
+                           "Buy" = c("B", "~B", "~B"),
+                           "No trade" = c("~N", "N", "~N"),
+                           "Sell" = c("~S", "~S", "S")
+        )
+      }else{
+        .jLabels = c("B", "N", "S")
+      }
+      n_iLabels <-  length(unique(.iLabels))
+      n_jLabels <-  length(unique(.jLabels))
+      iDecision <- factor(switch(input$ind_i,
+                                 "p1" = data$p1Decision[1:100], 
+                                 "p2" = data$p2Decision[1:100]),
+                          levels = c("buy", "no trade", "sell"), 
+                          labels = switch(input$ind_i,
+                                          "p1" = .iLabels, 
+                                          "p2" = .jLabels))
+      jDecision <- factor(switch(input$ind_i, 
+                                 "p1" = data$p2Decision[1:100], 
+                                 "p2" = data$p1Decision[1:100]), 
+                          levels = c("buy", "no trade", "sell"), 
+                          labels = switch(input$ind_i,
+                                          "p1" = .jLabels, 
+                                          "p2" = .iLabels))
+      
+      countTable <- data.frame(); probTable <- data.frame()
+      condiCountTable <- data.frame(); condiProbTable <- data.frame()
+      for(t in 1:100){
+        .countTable <- table(iDecision[1:t])
+        countTable <- countTable %>% bind_rows(.countTable)
+        .probTable <- prop.table(.countTable)
+        probTable <- probTable %>% bind_rows(.probTable)
+        
+        if(t == 1){
+          next
+        }else{
+          .condiCountTable <- table(iDecision[2:t], jDecision[1:(t-1)])
+          .condiCountMat <- matrix(.condiCountTable, nrow = 1)
+          names(.condiCountMat) <- paste(rep(rownames(.condiCountTable), dim(.condiCountTable)[2]), 
+                                         rep(colnames(.condiCountTable), each = dim(.condiCountTable)[1]),
+                                         sep = "|")
+          condiCountTable <- condiCountTable %>% bind_rows(.condiCountMat)
+          
+          .condiProbTable <- prop.table(.condiCountTable, 2)
+          .condiProbMat <- matrix(.condiProbTable, nrow = 1)
+          names(.condiProbMat) <- paste(rep(rownames(.condiProbTable), dim(.condiProbTable)[2]), 
+                                        rep(colnames(.condiProbTable), each = dim(.condiProbTable)[1]),
+                                        sep = "|")
+          condiProbTable <- condiProbTable %>% bind_rows(.condiProbMat)
+        }
+      }
+      ## ind_DF
+      .probDF <- probTable %>% 
+        bind_cols(trial = 1:100)
+      .condiProbDF <- condiProbTable %>% 
+        bind_cols(trial = 2:100) %>% 
+        select(trial, paste(substr(input$ind_iDecision, 1, 1), 
+                            substr(input$ind_jDecision, 1, 1), 
+                            sep = "|"))
+      ind_DF <- .probDF %>% 
+        left_join(.condiProbDF, by = "trial") %>% 
+        gather(key = decision, value = probability, -trial) %>% 
+        mutate(condition = grepl("\\|", decision))
+      ## ind_CT
+      .count <- countTable %>%
+        summarise_all(function(.){.[as.integer(input$ind_trialRange[2])] -
+            ifelse(input$ind_trialRange[1] == "1",
+                   0,
+                   .[as.integer(input$ind_trialRange[1])-1])})
+      .condiCount <- condiCountTable %>%
+        summarise_all(function(.){.[as.integer(input$ind_trialRange[2])-1] -
+            ifelse(input$ind_trialRange[1] %in% c("1", "2"),
+                   0,
+                   .[as.integer(input$ind_trialRange[1])-2])}) %>%
+        select(paste(names(.count),
+                     substr(input$ind_jDecision, 1, 1),
+                     sep = "|"))
+      ind_CT <- matrix(as.integer(c(.count, .condiCount)), ncol = 2,
+                       dimnames = list(names(.count), 
+                                       c("count", paste0("condi_count(.|",
+                                                         substr(input$ind_jDecision, 1, 1),
+                                                         ")"))))
+      ## ind_data
+      ind_data <- list(ind_DF = ind_DF, ind_CT = ind_CT)
+      
+      return(ind_data)
+    })
+    
+    output$ind_decisionProbPlot <- renderPlotly({
+      g <- ggplot(ind_data()$ind_DF, aes(x = trial, y = probability, 
+                                         group = decision, color = decision, 
+                                         linetype = condition)) +
+        geom_line() +
+        theme_bw()
+      ggplotly(g)
+    })
+    
+    
+    output$ind_contigencyTable <- DT::renderDataTable({
+      DT::datatable(ind_data()$ind_CT)
+    })
+    
+    output$ind_chiSquareTest <- renderPrint({
+      chisq.test(ind_data()$ind_CT)
+    })
+  }
   # "Action(p1,t) vs. Action(p2,t): Kmeans"
   {
     selectedDF <- reactive({
@@ -198,7 +318,7 @@ function(input, output, session){
     
     # 轉換原始資料
     
-    dAsA_data <- reactive({
+    dAsA_dataList <- reactive({
       .list <- list()
       for(i in 1:length(data)){
         if((i %% 2) == 1){
@@ -244,11 +364,13 @@ function(input, output, session){
       names(dAsA_data) <- c("LEADING-buy", "LEADING-no trade", "LEADING-sell",
                             "COINCIDENT-buy", "COINCIDENT-no trade", "COINCIDENT-sell",
                             "LAGGING-buy", "LAGGING-no trade", "LAGGING-sell")
-      rownames(dAsA_data) <- 1:160
+      .nPlayer <- nrow(dAsA_data)
+      rownames(dAsA_data) <- 1:.nPlayer
       ###
       if (as.logical(input$dAsA_na.rm) == TRUE) {
         if (sum(is.na(dAsA_data)) > 0) {
-          rmRow <- unique(which(is.na(dAsA_data)) %% 160)
+          rmRow <- unique(which(is.na(dAsA_data)) %% .nPlayer)
+          rmRow[which(rmRow == 0)] <- .nPlayer          
           dAsA_data <- dAsA_data[-rmRow, ]
         } 
       }
@@ -258,7 +380,19 @@ function(input, output, session){
         dAsA_data <- dAsA_data[,c(-4:-6)] 
       }
       ###
-      return(dAsA_data)
+      dAsA_dataList <- list(data = dAsA_data, remove = rmRow)
+      return(dAsA_dataList)
+    })
+    
+    dAsA_data <- reactive({
+      dAsA_dataList()$data
+    })
+    
+    output$dAsA_whoIsRemoved <- renderText({
+      if(input$dAsA_na.rm == TRUE){
+        print(c(sprintf("Remove number = %i;", length(dAsA_dataList()$remove)),
+                sprintf("Who ws removed: %s", paste(dAsA_dataList()$remove, collapse = " "))))
+      }
     })
     
     dAsA_clusters <- reactive({
@@ -374,7 +508,7 @@ function(input, output, session){
     
     dAsA_clusterTable <- reactive({
       .clusterTable <- as.data.frame(round(dAsA_data(), 3))
-      .clusterTable$plyaer <- rownames(.clusterTable)
+      .clusterTable$player <- rownames(.clusterTable)
       .clusterTable$cluster <- dAsA_Kmeans()$cluster
       return(.clusterTable)
     })
@@ -383,12 +517,24 @@ function(input, output, session){
       DT::datatable(
         {dAsA_clusterTable() %>% 
             filter(cluster == as.integer(input$dAsA_selectCluster)) %>% 
-            select(cluster, player, 1:9)
+            select(cluster, player, 1:length(.))
         },
         options = list(paging = FALSE)
       )
     )
     
+    output$dAsA_downloadData <- downloadHandler(
+      filename = function(){
+        paste0("deltaAsset_Kmeans_cluster", input$dAsA_k, "_", 
+               "range_", input$dAsA_trialRange[1], "-", input$dAsA_trialRange[2],".csv")
+      },
+      content = function(file){
+        .download <- dAsA_clusterTable() %>% 
+          filter(cluster == as.integer(input$dAsA_selectCluster)) %>% 
+          select(cluster, player, 1:length(.))
+        write.csv(.download, file)
+      }
+    )
   }
   # dAsA_MLE & LR test
   {}

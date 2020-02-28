@@ -2,7 +2,7 @@ library(shiny)
 source("data.R")
 
 navbarPage(
-  title = "EBG behavior data", selected = "dAsA",
+  title = "EBG behavior data", selected = "ind",
   # "all data table"
   {tabPanel("All data table",
     titlePanel(
@@ -48,6 +48,38 @@ navbarPage(
        plotlyOutput("sp_StockPricePlot"),
        plotlyOutput("sp_SelectedVarPlot")
      )
+  )},
+  
+  # [ind](independent plot and test)
+  # "Pr(Action(i, ~t)) vs. Pr(Action(i, ~t)|Action(j, ~t-1))"
+  {tabPanel(withMathJax(helpText("\\(Pr(B_i^{\\sim{t}})\\,vs.\\,Pr(B_i^{\\sim{t}}|S_j^{\\sim{t-1}})\\)")), value = "ind",
+    headerPanel(
+      ""
+    ),
+    sidebarPanel(
+      selectInput("ind_pairNumber", "No. pair:", 
+                  choices = 1:numOfPair),
+      selectInput("ind_i", "i is: (j is anther)", 
+                  choices = c("p1", "p2")),
+      selectInput("ind_iDecision", "i decision is:", 
+                  choices = c("Buy", "No trade", "Sell")),
+      selectInput("ind_iCategory", "Categorize decision for i", 
+                  choices = c("3 classes (B/N/S)", "2 classes (A_i/~A_i)")),
+      selectInput("ind_jDecision", "j Decision is: (condition)", 
+                  choices = c("Buy", "No trade", "Sell")),
+      selectInput("ind_jCategory", "Categorize decision for j", 
+                  choices = c("3 classes (B/N/S)", "2 classes (A_j/~A_j)")),
+      tags$hr(style = "border-color: black"),
+      tags$p("Chi-square test for Homogenetity"),
+      
+      sliderInput("ind_trialRange", "trial range[intitial, end]", 
+                  min = 1, max = 100, value = c(1, 100))
+    ),
+    mainPanel(
+      plotlyOutput("ind_decisionProbPlot"),
+      DT::dataTableOutput("ind_contigencyTable"),
+      verbatimTextOutput("ind_chiSquareTest")
+    )
   )},
   
   # [ipa](interplayer action) 
@@ -125,6 +157,7 @@ navbarPage(
                          min = 1, max = 100, value = c(1, 100)),
              selectInput("dAsA_na.rm", "NA remove?", 
                          choices = c("FALSE", "TRUE"), selected = "FALSE"),
+             textOutput("dAsA_whoIsRemoved"),
              selectInput("dAsA_conin.rm", "Conincident condition remove?",
                          choices = c("FALSE", "TRUE"), selected = "FALSE")
            ),
@@ -133,7 +166,7 @@ navbarPage(
              plotOutput("dAsA_overAllPlot"),
              #plotOutput("dAsA_clusterPlot"),
              #plotOutput("dAsA_tTestPlot"),
-             plotOutput("dAsA_fvizPlot"),
+             #plotOutput("dAsA_fvizPlot"),
              plotOutput("dAsA_elbowPlot"),
              plotOutput("dAsA_dendPlot")
            )
@@ -156,6 +189,7 @@ navbarPage(
            mainPanel(
              plotOutput("dAsA_clusterPlot"),
              tableOutput("dAsA_summarise"),
+             downloadButton("dAsA_downloadData", label = "點此下載下表"),
              DT::dataTableOutput("dAsA_clustersTable")
            )
         )
@@ -236,7 +270,7 @@ navbarPage(
 
   # [dc]
   # deltaPrice & Action correct!
-  tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta P^t\\,adjust\\)")), value = "dc",
+  {tabPanel(withMathJax(helpText("\\(A_i^t\\,vs.\\,\\Delta P^t\\,adjust\\)")), value = "dc",
     headerPanel(
       "股票變化(漲/持平/跌)與決策配對(買/不買不賣/賣)"
     ), 
@@ -298,5 +332,5 @@ navbarPage(
       )
       
     )
-  )
+  )}
 )
